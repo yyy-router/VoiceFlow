@@ -74,7 +74,6 @@ export default function Home() {
         <aside className="w-80 border-l border-border bg-bg-surface p-4 flex-shrink-0 shadow-[-4px_0_24px_rgba(0,0,0,0.03)]">
           <VoicePanel
             isListening={speech.isListening}
-            transcript={speech.transcript}
             isSupported={speech.isSupported}
             speechError={speech.error}
             isLoading={isLoading}

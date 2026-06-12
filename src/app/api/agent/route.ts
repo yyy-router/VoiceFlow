@@ -205,7 +205,7 @@ ${lastOperation || '无'}
 ${userInput}`;
 
     const response = await client.chat.completions.create({
-      model: 'qwen-plus',
+      model: process.env.LLM_MODEL || 'qwen-plus',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userMessage },

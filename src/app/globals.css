@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@theme inline {
+@theme {
   --color-bg-primary: #faf8f5;
   --color-bg-surface: #ffffff;
   --color-bg-hover: #f3f0ec;
@@ -20,14 +20,10 @@
   --font-body: var(--font-dm-sans);
 }
 
-@layer base {
-  body {
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    font-family: var(--font-body), system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+body {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body), system-ui, sans-serif;
 }
 
 @keyframes mic-pulse {
