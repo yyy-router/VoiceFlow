@@ -5,19 +5,17 @@ import { Mic, MicOff, Loader2 } from 'lucide-react';
 
 interface Props {
   isListening: boolean;
-  transcript: string;
   isSupported: boolean;
   speechError: string | null;
   isLoading: boolean;
   startListening: () => void;
-  stopListening: () => string;
+  stopListening: () => Promise<string>;
   onSpeechResult: (text: string) => void;
   stateInfo: { type: string; nodeCount: number; edgeCount: number; lastOp: string };
 }
 
 export default function VoicePanel({
   isListening,
-  transcript,
   isSupported,
   speechError,
   isLoading,
@@ -37,10 +35,10 @@ export default function VoicePanel({
     addLog('开始录音...');
   }, [startListening, addLog]);
 
-  const onUp = useCallback(() => {
+  const onUp = useCallback(async () => {
     if (!isHolding.current) return;
     isHolding.current = false;
-    const text = stopListening();
+    const text = await stopListening();
     if (text) {
       addLog(text);
       onSpeechResult(text);
@@ -91,12 +89,6 @@ export default function VoicePanel({
       </button>
 
       {/* Live transcript */}
-      {isListening && transcript && (
-        <div className="p-3 rounded-xl bg-accent-light border border-accent/10 text-sm text-text-primary min-h-[2.5rem] animate-fade-up">
-          {transcript}
-        </div>
-      )}
-
       {/* Error */}
       {speechError && (
         <p className="text-danger text-xs px-1">{speechError}</p>
