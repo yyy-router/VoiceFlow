@@ -1,13 +1,13 @@
 import { DiagramStateData } from './types';
 
 export function stateToMermaid(state: DiagramStateData): string {
-  const { type, nodes, edges } = state;
+  const { type, nodes, edges, direction } = state;
 
   if (type === 'er') return generateER(nodes, edges);
 
-  const direction = type === 'architecture' ? 'TB' : 'TD';
+  const dir = direction || 'TD';
   const keyword = type === 'architecture' ? 'graph' : 'flowchart';
-  const lines: string[] = [`${keyword} ${direction}`];
+  const lines: string[] = [`${keyword} ${dir}`];
 
   const shapeMap: Record<string, [string, string]> = {
     rectangle: ['[', ']'],
