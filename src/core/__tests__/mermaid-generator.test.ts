@@ -64,11 +64,11 @@ describe('stateToMermaid', () => {
     it('应该生成 graph 而非 flowchart', () => {
       const state: DiagramStateData = {
         type: 'architecture',
-        direction: 'TB',
+        direction: 'TD',
         nodes: [{ id: 'n1', label: 'API网关', shape: 'rectangle' }],
         edges: [],
       };
-      expect(stateToMermaid(state)).toContain('graph TB');
+      expect(stateToMermaid(state)).toContain('graph TD');
       expect(stateToMermaid(state)).not.toContain('flowchart');
     });
   });
