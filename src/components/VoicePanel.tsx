@@ -8,6 +8,7 @@ interface Props {
   isSupported: boolean;
   speechError: string | null;
   isLoading: boolean;
+  statusMessage: string;
   startListening: () => void;
   stopListening: () => Promise<string>;
   onSpeechResult: (text: string) => void;
@@ -19,6 +20,7 @@ export default function VoicePanel({
   isSupported,
   speechError,
   isLoading,
+  statusMessage,
   startListening,
   stopListening,
   onSpeechResult,
@@ -88,7 +90,14 @@ export default function VoicePanel({
         )}
       </button>
 
-      {/* Live transcript */}
+      {/* Status message */}
+      {statusMessage && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent-light border border-accent/10 text-sm text-accent animate-fade-up">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          {statusMessage}
+        </div>
+      )}
+
       {/* Error */}
       {speechError && (
         <p className="text-danger text-xs px-1">{speechError}</p>

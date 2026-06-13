@@ -67,7 +67,12 @@ export async function POST(request: NextRequest) {
       pending.clear();
     });
 
-    // Connection & session already ready from pool — stream audio immediately
+    // Switch to Manual mode (turn_detection: null) before sending audio
+    ws.send(JSON.stringify({
+      type: 'session.update',
+      session: { turn_detection: null },
+    }));
+    await waitFor('session.updated', 5000);
 
     const CHUNK_SIZE = 32000;
     for (let offset = 0; offset < audio.length; offset += CHUNK_SIZE) {
