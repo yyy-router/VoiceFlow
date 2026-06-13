@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // ─── Diagram Type ───
-export const DiagramType = z.enum(['flowchart', 'er', 'architecture']);
+export const DiagramType = z.enum(['flowchart', 'er', 'architecture', 'sequence']);
 export type DiagramType = z.infer<typeof DiagramType>;
 
 // ─── Node Type ───
@@ -19,7 +19,7 @@ export const EntityAttribute = z.object({
 });
 export type EntityAttribute = z.infer<typeof EntityAttribute>;
 
-// ─── LLM 输出节点（id 可选，LLM 可直接指定 id 或通过 id_hint 建议） ───
+// ─── LLM 输出节点 ───
 export const RawNode = z.object({
   label: z.string().min(1),
   type: NodeType,
@@ -44,18 +44,18 @@ export const Edge = z.object({
 });
 export type Edge = z.infer<typeof Edge>;
 
-// ─── 完整 Diagram Schema ───
-export const DiagramSchema = z.object({
-  diagramType: DiagramType,
+// ─── Node-Graph Schema (flowchart / er / architecture) ───
+export const NodeGraphSchema = z.object({
+  diagramType: z.enum(['flowchart', 'er', 'architecture']),
   title: z.string().optional(),
   nodes: z.array(Node),
   edges: z.array(Edge),
 });
-export type DiagramSchema = z.infer<typeof DiagramSchema>;
+export type NodeGraphSchema = z.infer<typeof NodeGraphSchema>;
 
-// ─── 未规范化的原始 Schema（LLM 输出，节点无 id） ───
-export const RawDiagramSchema = z.object({
-  diagramType: DiagramType,
+// ─── Raw Node-Graph Schema (LLM output) ───
+export const RawNodeGraphSchema = z.object({
+  diagramType: z.enum(['flowchart', 'er', 'architecture']),
   title: z.string().optional(),
   nodes: z.array(RawNode),
   edges: z.array(z.object({
@@ -64,9 +64,77 @@ export const RawDiagramSchema = z.object({
     label: z.string().optional(),
   })),
 });
+export type RawNodeGraphSchema = z.infer<typeof RawNodeGraphSchema>;
+
+// ─── Sequence Diagram ───
+export const SequenceParticipant = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+});
+export type SequenceParticipant = z.infer<typeof SequenceParticipant>;
+
+export const SequenceMessageType = z.enum(['sync', 'async', 'return']).optional();
+
+export const SequenceMessage = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  text: z.string().min(1),
+  messageType: SequenceMessageType,
+});
+export type SequenceMessage = z.infer<typeof SequenceMessage>;
+
+export const SequenceSchema = z.object({
+  diagramType: z.literal('sequence'),
+  title: z.string().optional(),
+  participants: z.array(SequenceParticipant),
+  messages: z.array(SequenceMessage),
+});
+export type SequenceSchema = z.infer<typeof SequenceSchema>;
+
+// ─── Raw Sequence Schema (LLM output, participants may lack IDs) ───
+export const RawSequenceParticipant = z.object({
+  id: z.string().optional(),
+  id_hint: z.string().optional(),
+  label: z.string().min(1),
+});
+
+export const RawSequenceSchema = z.object({
+  diagramType: z.literal('sequence'),
+  title: z.string().optional(),
+  participants: z.array(RawSequenceParticipant),
+  messages: z.array(z.object({
+    from: z.string().min(1),
+    to: z.string().min(1),
+    text: z.string().min(1),
+    messageType: z.enum(['sync', 'async', 'return']).optional(),
+  })),
+});
+export type RawSequenceSchema = z.infer<typeof RawSequenceSchema>;
+
+// ─── Unified Diagram Schema (discriminated union) ───
+export const DiagramSchema = z.discriminatedUnion('diagramType', [
+  NodeGraphSchema,
+  SequenceSchema,
+]);
+export type DiagramSchema = z.infer<typeof DiagramSchema>;
+
+// ─── Raw Diagram Schema (LLM output) ───
+export const RawDiagramSchema = z.discriminatedUnion('diagramType', [
+  RawNodeGraphSchema,
+  RawSequenceSchema,
+]);
 export type RawDiagramSchema = z.infer<typeof RawDiagramSchema>;
 
-// ─── Patch ───
+// ─── Type guards ───
+export function isNodeGraph(schema: DiagramSchema): schema is NodeGraphSchema {
+  return schema.diagramType !== 'sequence';
+}
+
+export function isNodeGraphRaw(schema: RawDiagramSchema): schema is RawNodeGraphSchema {
+  return schema.diagramType !== 'sequence';
+}
+
+// ─── Patch (deprecated, kept for type compatibility) ───
 export const PatchTarget = z.object({
   id: z.string().optional(),
   label: z.string().optional(),
