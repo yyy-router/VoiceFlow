@@ -25,6 +25,7 @@ export const RawNode = z.object({
   type: NodeType,
   id: z.string().optional(),
   id_hint: z.string().optional(),
+  color: z.string().optional(),
   attributes: z.array(EntityAttribute).optional(),
 });
 export type RawNode = z.infer<typeof RawNode>;

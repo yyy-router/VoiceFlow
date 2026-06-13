@@ -56,6 +56,7 @@ export class DiagramState {
             label: n.label,
             id: n.id,
             type: n.type,
+            color: n.color,
             attributes: n.attributes,
           })),
           edges: this.schema.edges.map(e => ({

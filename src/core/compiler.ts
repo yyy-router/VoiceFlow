@@ -9,6 +9,12 @@ function sanitize(label: string): string {
     .replace(/"/g, "'");
 }
 
+const VALID_COLOR = /^[#\w\d(),.%\s-]+$/;
+
+function safeColor(c: string): string | null {
+  return VALID_COLOR.test(c) ? c : null;
+}
+
 const SHAPE_MAP: Record<string, [string, string]> = {
   start: ['([', '])'],
   process: ['[', ']'],
@@ -37,6 +43,13 @@ function compileFlowchart(schema: DiagramSchema): string {
     const label = e.label ? `|${sanitize(e.label)}|` : '';
     lines.push(`    ${e.from} -->${label} ${e.to}`);
   }
+  // Node colors
+  for (const n of schema.nodes) {
+    if (n.color) {
+      const c = safeColor(n.color);
+      if (c) lines.push(`    style ${n.id} fill:${c}`);
+    }
+  }
   return lines.join('\n');
 }
 
@@ -49,6 +62,13 @@ function compileArchitecture(schema: DiagramSchema): string {
   for (const e of schema.edges) {
     const label = e.label ? `|${sanitize(e.label)}|` : '';
     lines.push(`    ${e.from} -->${label} ${e.to}`);
+  }
+  // Node colors
+  for (const n of schema.nodes) {
+    if (n.color) {
+      const c = safeColor(n.color);
+      if (c) lines.push(`    style ${n.id} fill:${c}`);
+    }
   }
   return lines.join('\n');
 }

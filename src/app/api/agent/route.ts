@@ -10,6 +10,7 @@ const SYSTEM_PROMPT = `你是语音绘图助手，负责理解用户意图并输
 4. 流程图和架构图所有节点之间必须有边连接，不允许孤立节点。ER 图允许多实体通过边关联，也允许单实体无边的独立展示
 5. 禁止输出 Mermaid 代码或文本解释
 6. 同义词：登陆≈登录，ER图≈关系图，架构图≈系统结构图
+7. 节点 color 字段仅当用户明确要求时才设置，值必须是合法 CSS 颜色（如 #90EE90、rgb(144,238,144)、lightgreen）。用户说"淡绿色"时转换为 #90EE90，说"橙色"转为 #FF8C00，绝不要输出中文颜色名
 
 ## 支持的图类型
 - flowchart：流程图、业务流程、审批流程（节点类型：start/process/decision/end）
@@ -41,6 +42,7 @@ function buildTools(): OpenAI.ChatCompletionTool[] {
                   label: { type: 'string', description: '节点中文名称' },
                   type: { type: 'string', enum: ['start', 'process', 'decision', 'end', 'entity', 'service', 'database'], description: '节点语义类型' },
                   id_hint: { type: 'string', description: '英文 snake_case 标识，如 login、sms_verify' },
+                  color: { type: 'string', description: '节点背景色（仅流程图和架构图），值必须是合法 CSS 颜色（如 #90EE90、lightgreen、rgb(144,238,144)），禁止使用中文颜色名' },
                   attributes: {
                     type: 'array',
                     description: 'ER 图实体的字段列表，非 ER 图不需要',
@@ -142,13 +144,14 @@ export async function POST(request: NextRequest) {
         const focusInfo = context.focus?.nodes
           ? `## 当前关注节点\n${context.focus.nodes.join(', ')}` : '';
 
-        // Render node details (with attributes for ER diagrams)
+        // Render node details (with attributes for ER, color for flowchart/architecture)
         const nodeDetails = summary.nodes?.length > 0
           ? summary.nodes.map((n: any) => {
+              const colorStr = n.color ? ` color=${n.color}` : '';
               const attrStr = n.attributes?.length > 0
                 ? ` [${n.attributes.map((a: any) => `${a.type || 'string'} ${a.name}`).join(', ')}]`
                 : '';
-              return `  - ${n.label}(${n.type})${attrStr}`;
+              return `  - ${n.label}(${n.type})${colorStr}${attrStr}`;
             }).join('\n')
           : '  无';
 
@@ -176,14 +179,14 @@ ${focusInfo}
 ## 用户语音指令
 ${userInput}`;
 
-        send({ type: 'thinking', message: 'AI 正在理解指令...' });
+        send({ type: 'status', message: 'AI 正在思考...' });
 
         const model = process.env.LLM_MODEL || 'qwen-turbo';
         let commands: { action: string; label: string; payload: Record<string, unknown> }[] = [];
         let lastError: string | null = null;
 
         for (let attempt = 0; attempt < 2; attempt++) {
-          const stream = await client.chat.completions.create({
+          const llmParams: any = {
             model,
             messages: [
               { role: 'system', content: SYSTEM_PROMPT },
@@ -193,12 +196,27 @@ ${userInput}`;
             tool_choice: 'auto',
             temperature: 0.1,
             stream: true,
-          });
+            extra_body: { enable_thinking: true },
+          };
+          const stream = await client.chat.completions.create(llmParams) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
-          // Collect tool calls from stream
+          // Collect tool calls and reasoning from stream
           const toolCalls: { id: string; type: 'function'; function: { name: string; arguments: string } }[] = [];
+          let hasReasoning = false;
           for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta;
+
+            // Stream reasoning content
+            if ((delta as any)?.reasoning_content) {
+              if (!hasReasoning) hasReasoning = true;
+              send({ type: 'reasoning', text: (delta as any).reasoning_content });
+            }
+
+            // When tool calls start, signal transition
+            if (delta?.tool_calls && !toolCalls.length) {
+              send({ type: 'status', message: '正在生成图表...' });
+            }
+
             if (delta?.tool_calls) {
               for (const tc of delta.tool_calls) {
                 if (tc.index == null) continue;
