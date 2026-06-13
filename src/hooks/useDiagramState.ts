@@ -35,8 +35,13 @@ export function useDiagramState() {
     if (stateRef.current.redo()) refresh();
   }, [refresh]);
 
+  const clear = useCallback(() => {
+    if (stateRef.current.clear()) refresh();
+  }, [refresh]);
+
   const getContextJson = useCallback(() => stateRef.current.getContextJson(), []);
   const getSummary = useCallback(() => stateRef.current.getSummary(), []);
+  const getContextForLLM = useCallback((input: string) => stateRef.current.getContextForLLM(input), []);
 
   return {
     schema,
@@ -47,7 +52,9 @@ export function useDiagramState() {
     setSchemaFromRaw,
     undo,
     redo,
+    clear,
     getContextJson,
     getSummary,
+    getContextForLLM,
   };
 }

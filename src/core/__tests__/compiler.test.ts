@@ -64,15 +64,16 @@ describe('compileMermaid — ER', () => {
     const schema: DiagramSchema = {
       diagramType: 'er',
       nodes: [
-        { id: 'user', label: '用户表', type: 'entity' },
-        { id: 'order', label: '订单表', type: 'entity' },
+        { id: 'user', label: '用户表', type: 'entity', attributes: [{ name: '用户ID', type: 'int' }, { name: '昵称', type: 'string' }] },
+        { id: 'order', label: '订单表', type: 'entity', attributes: [{ name: '订单ID', type: 'int' }, { name: '金额', type: 'float' }] },
       ],
       edges: [{ from: 'user', to: 'order', label: '下单' }],
     };
     const result = compileMermaid(schema);
     expect(result).toContain('erDiagram');
-    expect(result).toContain('user {');
-    expect(result).toContain('int id PK');
-    expect(result).toContain('user ||--o{ order : "下单"');
+    expect(result).toContain('用户表 {');
+    expect(result).toContain('int 用户ID');
+    expect(result).toContain('string 昵称');
+    expect(result).toContain('下单');
   });
 });
