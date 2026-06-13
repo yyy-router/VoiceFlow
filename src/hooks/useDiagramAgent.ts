@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { DiagramCommand } from '@/core/types';
+interface AgentCommand {
+  action: string;
+  label?: string;
+  payload: Record<string, unknown>;
+}
 
 export interface AgentStep {
   type: 'thinking' | 'executing' | 'done';
@@ -13,7 +17,7 @@ export function useDiagramAgent() {
   const [statusMessage, setStatusMessage] = useState('');
 
   const sendToAgent = useCallback(
-    async (userInput: string, diagramStateJson: string, lastOperation: string): Promise<DiagramCommand[]> => {
+    async (userInput: string, diagramStateJson: string, lastOperation: string): Promise<AgentCommand[]> => {
       setIsLoading(true);
       setStatusMessage('AI 正在理解指令...');
 
@@ -47,7 +51,7 @@ export function useDiagramAgent() {
               } else if (event.type === 'commands') {
                 setStatusMessage('');
                 setIsLoading(false);
-                return event.commands as DiagramCommand[];
+                return event.commands as AgentCommand[];
               }
             } catch { /* skip parse errors */ }
           }

@@ -10,7 +10,7 @@ import DiagramCanvas from '@/components/DiagramCanvas';
 import ExportButton from '@/components/ExportButton';
 
 export default function Home() {
-  const { state, mermaidCode, canUndo, canRedo, lastOperation, applyCommand, undo, redo, getContextJson } =
+  const { schema, mermaidCode, canUndo, canRedo, lastOperation, applyPatch, setSchemaFromRaw, undo, redo, getContextJson } =
     useDiagramState();
   const { sendToAgent, isLoading, statusMessage } = useDiagramAgent();
   const speech = useSpeech();
@@ -23,19 +23,31 @@ export default function Home() {
       setCombinedStatus('');
 
       for (const cmd of commands) {
-        if (cmd.action === 'ask_user') {
-          if ('speechSynthesis' in window) {
-            const u = new SpeechSynthesisUtterance(cmd.payload.question as string);
-            u.lang = 'zh-CN';
-            u.rate = 1.1;
-            speechSynthesis.speak(u);
-          }
-        } else {
-          applyCommand(cmd);
+        switch (cmd.action) {
+          case 'ask_user':
+            if ('speechSynthesis' in window) {
+              const u = new SpeechSynthesisUtterance(cmd.payload.question as string);
+              u.lang = 'zh-CN';
+              u.rate = 1.1;
+              speechSynthesis.speak(u);
+            }
+            break;
+          case 'generate_diagram':
+            setSchemaFromRaw(cmd.payload);
+            break;
+          case 'modify_diagram':
+            applyPatch(cmd.payload as any);
+            break;
+          case 'undo':
+            undo();
+            break;
+          case 'redo':
+            redo();
+            break;
         }
       }
     },
-    [sendToAgent, getContextJson, lastOperation, applyCommand]
+    [sendToAgent, getContextJson, lastOperation, applyPatch, setSchemaFromRaw, undo, redo]
   );
 
   return (
@@ -86,9 +98,9 @@ export default function Home() {
             stopListening={speech.stopListening}
             onSpeechResult={handleSpeech}
             stateInfo={{
-              type: state.type || '未创建',
-              nodeCount: state.nodes.length,
-              edgeCount: state.edges.length,
+              type: schema.diagramType || '未创建',
+              nodeCount: schema.nodes.length,
+              edgeCount: schema.edges.length,
               lastOp: lastOperation,
             }}
           />

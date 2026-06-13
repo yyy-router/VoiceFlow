@@ -2,14 +2,11 @@
 
 import { useRef, useState, useCallback } from 'react';
 import { DiagramState } from '@/core/diagram-state';
-import { DiagramCommand, DiagramStateData } from '@/core/types';
-import { stateToMermaid } from '@/core/mermaid-generator';
-
-const EMPTY_STATE: DiagramStateData = { type: 'flowchart', direction: 'TD', nodes: [], edges: [] };
+import { DiagramSchema, DiagramPatch } from '@/core/schema';
 
 export function useDiagramState() {
   const stateRef = useRef(new DiagramState());
-  const [state, setState] = useState<DiagramStateData>(EMPTY_STATE);
+  const [schema, setSchema] = useState<DiagramSchema>(stateRef.current.getSchema());
   const [mermaidCode, setMermaidCode] = useState('');
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -17,24 +14,46 @@ export function useDiagramState() {
 
   const refresh = useCallback(() => {
     const ds = stateRef.current;
-    setState(ds.getState());
-    setMermaidCode(stateToMermaid(ds.getState()));
+    setSchema(ds.getSchema());
+    setMermaidCode(ds.compile());
     setCanUndo(ds.canUndo);
     setCanRedo(ds.canRedo);
     setLastOperation(ds.getLastOperationText());
   }, []);
 
-  const applyCommand = useCallback(
-    (cmd: DiagramCommand) => {
-      stateRef.current.applyCommand(cmd);
-      refresh();
-    },
-    [refresh]
-  );
+  const applyPatch = useCallback((patch: DiagramPatch) => {
+    stateRef.current.applyPatch(patch);
+    refresh();
+  }, [refresh]);
 
-  const undo = useCallback(() => applyCommand({ action: 'undo', payload: {} }), [applyCommand]);
-  const redo = useCallback(() => applyCommand({ action: 'redo', payload: {} }), [applyCommand]);
+  const setSchemaFromRaw = useCallback((raw: unknown) => {
+    const result = stateRef.current.setSchema(raw);
+    if (result.schema) refresh();
+    return result;
+  }, [refresh]);
+
+  const undo = useCallback(() => {
+    if (stateRef.current.undo()) refresh();
+  }, [refresh]);
+
+  const redo = useCallback(() => {
+    if (stateRef.current.redo()) refresh();
+  }, [refresh]);
+
   const getContextJson = useCallback(() => stateRef.current.getContextJson(), []);
+  const getSummary = useCallback(() => stateRef.current.getSummary(), []);
 
-  return { state, mermaidCode, canUndo, canRedo, lastOperation, applyCommand, undo, redo, getContextJson };
+  return {
+    schema,
+    mermaidCode,
+    canUndo,
+    canRedo,
+    lastOperation,
+    applyPatch,
+    setSchemaFromRaw,
+    undo,
+    redo,
+    getContextJson,
+    getSummary,
+  };
 }
