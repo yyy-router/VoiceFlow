@@ -186,16 +186,39 @@ function buildTools(): OpenAI.ChatCompletionTool[] {
   ];
 }
 
+const ACTION_LABELS: Record<string, string> = {
+  create_diagram: '创建图表',
+  add_node: '添加节点',
+  delete_node: '删除节点',
+  rename_node: '重命名节点',
+  change_node_shape: '改变形状',
+  add_edge: '添加连线',
+  delete_edge: '删除连线',
+  move_node: '移动节点',
+  layout_diagram: '调整布局',
+  undo: '撤销',
+  redo: '恢复',
+  ask_user: '请求澄清',
+};
+
 export async function POST(request: NextRequest) {
-  try {
-    const { userInput, diagramStateJson, lastOperation } = await request.json();
+  const encoder = new TextEncoder();
 
-    const client = new OpenAI({
-      apiKey: process.env.DASHSCOPE_API_KEY,
-      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    });
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      };
 
-    const userMessage = `## DIAGRAM_STATE_JSON
+      try {
+        const { userInput, diagramStateJson, lastOperation } = await request.json();
+
+        const client = new OpenAI({
+          apiKey: process.env.DASHSCOPE_API_KEY,
+          baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        });
+
+        const userMessage = `## DIAGRAM_STATE_JSON
 ${diagramStateJson || '{}'}
 
 ## 最近操作
@@ -204,40 +227,55 @@ ${lastOperation || '无'}
 ## 用户语音指令
 ${userInput}`;
 
-    const response = await client.chat.completions.create({
-      model: process.env.LLM_MODEL || 'qwen-plus',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userMessage },
-      ],
-      tools: buildTools(),
-      tool_choice: 'auto',
-      temperature: 0.1,
-    });
+        send({ type: 'thinking', message: 'AI 正在理解指令...' });
 
-    const msg = response.choices[0]?.message;
-    const toolCalls = msg?.tool_calls || [];
+        const response = await client.chat.completions.create({
+          model: process.env.LLM_MODEL || 'qwen-plus',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: userMessage },
+          ],
+          tools: buildTools(),
+          tool_choice: 'auto',
+          temperature: 0.1,
+        });
 
-    const commands: { action: string; payload: Record<string, unknown> }[] = [];
+        const msg = response.choices[0]?.message;
+        const toolCalls = msg?.tool_calls || [];
 
-    for (const tc of toolCalls) {
-      if (tc.type !== 'function') continue;
-      const fn = tc.function as { name: string; arguments: string };
-      const args: Record<string, unknown> = JSON.parse(fn.arguments);
+        const commands: { action: string; label: string; payload: Record<string, unknown> }[] = [];
 
-      // Auto-map type to shape for add_node
-      if (fn.name === 'add_node' && args.type && !args.shape) {
-        args.shape = TYPE_SHAPE_MAP[args.type as string] || 'rectangle';
+        for (const tc of toolCalls) {
+          if (tc.type !== 'function') continue;
+          const fn = tc.function as { name: string; arguments: string };
+          const args: Record<string, unknown> = JSON.parse(fn.arguments);
+
+          if (fn.name === 'add_node' && args.type && !args.shape) {
+            args.shape = TYPE_SHAPE_MAP[args.type as string] || 'rectangle';
+          }
+
+          const label = ACTION_LABELS[fn.name] || fn.name;
+          commands.push({ action: fn.name, label, payload: args });
+        }
+
+        send({ type: 'commands', commands });
+        controller.close();
+      } catch (error) {
+        console.error('Agent API error:', error);
+        send({
+          type: 'commands',
+          commands: [{ action: 'ask_user', label: '错误', payload: { question: 'AI 服务暂时不可用，请稍后重试。' } }],
+        });
+        controller.close();
       }
+    },
+  });
 
-      commands.push({ action: fn.name, payload: args });
-    }
-
-    return NextResponse.json({ commands });
-  } catch (error) {
-    console.error('Agent API error:', error);
-    return NextResponse.json({
-      commands: [{ action: 'ask_user', payload: { question: 'AI 服务暂时不可用，请稍后重试。' } }],
-    });
-  }
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
 }

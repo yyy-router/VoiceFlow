@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Undo2, Redo2, Sparkles } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { useDiagramAgent } from '@/hooks/useDiagramAgent';
@@ -12,12 +12,16 @@ import ExportButton from '@/components/ExportButton';
 export default function Home() {
   const { state, mermaidCode, canUndo, canRedo, lastOperation, applyCommand, undo, redo, getContextJson } =
     useDiagramState();
-  const { sendToAgent, isLoading } = useDiagramAgent();
+  const { sendToAgent, isLoading, statusMessage } = useDiagramAgent();
   const speech = useSpeech();
+  const [combinedStatus, setCombinedStatus] = useState('');
 
   const handleSpeech = useCallback(
     async (text: string) => {
+      setCombinedStatus('AI 正在理解指令...');
       const commands = await sendToAgent(text, getContextJson(), lastOperation);
+      setCombinedStatus('');
+
       for (const cmd of commands) {
         if (cmd.action === 'ask_user') {
           if ('speechSynthesis' in window) {
@@ -77,6 +81,7 @@ export default function Home() {
             isSupported={speech.isSupported}
             speechError={speech.error}
             isLoading={isLoading}
+            statusMessage={combinedStatus || statusMessage}
             startListening={speech.startListening}
             stopListening={speech.stopListening}
             onSpeechResult={handleSpeech}
