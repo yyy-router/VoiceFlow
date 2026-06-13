@@ -116,6 +116,14 @@ export class DiagramState {
     return true;
   }
 
+  restore(schema: DiagramSchema, undoStack: DiagramSchema[], redoStack: DiagramSchema[], actionLog: ActionLog[]): void {
+    this.schema = schema;
+    this.undoStack = undoStack;
+    this.redoStack = redoStack;
+    this.actionLog = actionLog;
+    this.lastOpText = '已恢复';
+  }
+
   clear(): boolean {
     if (this.schema.nodes.length === 0 && this.schema.edges.length === 0) return false;
     this.undoStack.push({ ...this.schema });
