@@ -1,4 +1,4 @@
-import { DiagramSchema, Node } from './schema';
+import { NodeGraphSchema, Node } from './schema';
 
 // ─── Similarity (internal) ───
 function tokenize(label: string): Set<string> {
@@ -38,7 +38,7 @@ function similarity(a: Node, b: Node): number {
 }
 
 // ─── Repair ───
-export function repairGraph(schema: DiagramSchema): DiagramSchema {
+export function repairGraph(schema: NodeGraphSchema): NodeGraphSchema {
   let edges = [...schema.edges];
 
   // 1. Connect orphaned nodes

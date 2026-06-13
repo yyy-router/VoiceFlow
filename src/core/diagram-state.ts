@@ -20,13 +20,21 @@ export class DiagramState {
   setSchema(raw: unknown): { schema: DiagramSchema | null; errors: string[] } {
     const result = processRawSchema(raw);
     if (result.schema) {
-      const repaired = repairGraph(result.schema);
-      this.logAction('update', `nodes:${repaired.nodes.length}`);
-      this.undoStack.push({ ...this.schema });
-      this.redoStack = [];
-      this.schema = repaired;
+      // Only repair node-based graphs
+      if ('nodes' in result.schema) {
+        const repaired = repairGraph(result.schema as any);
+        this.logAction('update', `nodes:${repaired.nodes.length}`);
+        this.undoStack.push(structuredClone(this.schema));
+        this.redoStack = [];
+        this.schema = repaired;
+      } else {
+        this.logAction('update', `sequence:${result.schema.participants.length}p`);
+        this.undoStack.push(structuredClone(this.schema));
+        this.redoStack = [];
+        this.schema = result.schema;
+      }
       this.lastOpText = '创建/更新了图';
-      return { schema: repaired, errors: [] };
+      return { schema: result.schema, errors: [] };
     }
     return result;
   }
@@ -45,26 +53,30 @@ export class DiagramState {
   }
 
   getContextForLLM(userInput: string): string {
+    const s = this.schema;
+    const summary: any = {
+      diagramType: s.diagramType,
+    };
+    if ('nodes' in s) {
+      summary.node_count = s.nodes.length;
+      summary.edge_count = s.edges.length;
+      summary.labels = s.nodes.map(n => n.label);
+      summary.nodes = s.nodes.map(n => ({
+        label: n.label, id: n.id, type: n.type, color: n.color, attributes: n.attributes,
+      }));
+      summary.edges = s.edges.map(e => ({
+        from: e.from, to: e.to, label: e.label,
+      }));
+    } else {
+      summary.node_count = s.participants.length;
+      summary.edge_count = s.messages.length;
+      summary.labels = s.participants.map(p => p.label);
+      summary.participants = s.participants;
+      summary.messages = s.messages;
+    }
     return JSON.stringify({
       context: {
-        schema_summary: {
-          diagramType: this.schema.diagramType,
-          node_count: this.schema.nodes.length,
-          edge_count: this.schema.edges.length,
-          labels: this.schema.nodes.map(n => n.label),
-          nodes: this.schema.nodes.map(n => ({
-            label: n.label,
-            id: n.id,
-            type: n.type,
-            color: n.color,
-            attributes: n.attributes,
-          })),
-          edges: this.schema.edges.map(e => ({
-            from: e.from,
-            to: e.to,
-            label: e.label,
-          })),
-        },
+        schema_summary: summary,
         focus: this.focusNodes.length > 0 ? { nodes: this.focusNodes } : undefined,
         recent_actions: this.actionLog.slice(-5),
       },
@@ -85,13 +97,12 @@ export class DiagramState {
   }
 
   getSummary(): string {
-    return JSON.stringify({
-      diagramType: this.schema.diagramType,
-      title: this.schema.title,
-      nodeCount: this.schema.nodes.length,
-      edgeCount: this.schema.edges.length,
-      nodeLabels: this.schema.nodes.map(n => n.label),
-    });
+    const s = this.schema;
+    const base = { diagramType: s.diagramType, title: (s as any).title };
+    if ('nodes' in s) {
+      return JSON.stringify({ ...base, nodeCount: s.nodes.length, edgeCount: s.edges.length, nodeLabels: s.nodes.map(n => n.label) });
+    }
+    return JSON.stringify({ ...base, participantCount: s.participants.length, messageCount: s.messages.length });
   }
 
   getLastOperationText(): string {
@@ -101,7 +112,7 @@ export class DiagramState {
   undo(): boolean {
     const prev = this.undoStack.pop();
     if (!prev) return false;
-    this.redoStack.push({ ...this.schema });
+    this.redoStack.push(structuredClone(this.schema));
     this.schema = prev;
     this.lastOpText = '撤销了上一步';
     return true;
@@ -110,7 +121,7 @@ export class DiagramState {
   redo(): boolean {
     const next = this.redoStack.pop();
     if (!next) return false;
-    this.undoStack.push({ ...this.schema });
+    this.undoStack.push(structuredClone(this.schema));
     this.schema = next;
     this.lastOpText = '恢复了上一步';
     return true;
@@ -125,8 +136,11 @@ export class DiagramState {
   }
 
   clear(): boolean {
-    if (this.schema.nodes.length === 0 && this.schema.edges.length === 0) return false;
-    this.undoStack.push({ ...this.schema });
+    const s = this.schema as any;
+    const isEmpty = s.nodes ? (s.nodes.length === 0 && s.edges.length === 0)
+      : (s.participants?.length ?? 0) === 0 && (s.messages?.length ?? 0) === 0;
+    if (isEmpty) return false;
+    this.undoStack.push(structuredClone(this.schema));
     this.redoStack = [];
     this.schema = { diagramType: 'flowchart', nodes: [], edges: [] };
     this.lastOpText = '清空了画布';

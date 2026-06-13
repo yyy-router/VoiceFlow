@@ -46,12 +46,13 @@ export class DiagramContextStore {
   }
 
   getContextForLLM(userInput: string): string {
+    const s = this.schema as any;
     const ctx: LLMContext = {
       schema_summary: {
-        diagramType: this.schema.diagramType,
-        node_count: this.schema.nodes.length,
-        edge_count: this.schema.edges.length,
-        labels: this.schema.nodes.map(n => n.label),
+        diagramType: s.diagramType,
+        node_count: s.nodes?.length ?? s.participants?.length ?? 0,
+        edge_count: s.edges?.length ?? s.messages?.length ?? 0,
+        labels: (s.nodes || s.participants || []).map((n: any) => n.label),
       },
       recent_actions: this.history,
     };
