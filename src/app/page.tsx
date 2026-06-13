@@ -8,10 +8,16 @@ import { useDiagramState } from '@/hooks/useDiagramState';
 import VoicePanel from '@/components/VoicePanel';
 import DiagramCanvas from '@/components/DiagramCanvas';
 import ExportButton from '@/components/ExportButton';
+import BottomTabBar from '@/components/BottomTabBar';
 
 export default function Home() {
-  const { schema, mermaidCode, canUndo, canRedo, lastOperation, setSchemaFromRaw, undo, redo, clear, getContextForLLM } =
-    useDiagramState();
+  const {
+    schema, mermaidCode, canUndo, canRedo, lastOperation,
+    boards, activeIndex,
+    setSchemaFromRaw, undo, redo, clear,
+    addBoard, removeBoard, renameBoard, switchBoard,
+    getContextForLLM,
+  } = useDiagramState();
   const { sendToAgent, isLoading, statusMessage, reasoningText } = useDiagramAgent();
   const speech = useSpeech();
   const [question, setQuestion] = useState('');
@@ -114,6 +120,16 @@ export default function Home() {
           />
         </aside>
       </div>
+
+      {/* Bottom tab bar */}
+      <BottomTabBar
+        boards={boards}
+        activeIndex={activeIndex}
+        onSwitch={switchBoard}
+        onAdd={addBoard}
+        onRemove={removeBoard}
+        onRename={renameBoard}
+      />
     </main>
   );
 }
