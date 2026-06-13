@@ -1,47 +1,75 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
-import { DiagramState } from '@/core/diagram-state';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { DiagramSchema } from '@/core/schema';
+import { BoardStore } from '@/core/board-store';
 
 export function useDiagramState() {
-  const stateRef = useRef(new DiagramState());
-  const [schema, setSchema] = useState<DiagramSchema>(stateRef.current.getSchema());
-  const [mermaidCode, setMermaidCode] = useState('');
+  const storeRef = useRef(new BoardStore());
+  const [schema, setSchema] = useState<DiagramSchema>(storeRef.current.activeSchema);
+  const [mermaidCode, setMermaidCode] = useState(storeRef.current.activeMermaidCode);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [lastOperation, setLastOperation] = useState('无');
+  const [boards, setBoards] = useState(() => storeRef.current.list());
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  // Load from localStorage on client mount only (avoids SSR hydration mismatch)
+  useEffect(() => {
+    if (storeRef.current.load()) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refresh = useCallback(() => {
-    const ds = stateRef.current;
-    setSchema(ds.getSchema());
-    setMermaidCode(ds.compile());
-    setCanUndo(ds.canUndo);
-    setCanRedo(ds.canRedo);
-    setLastOperation(ds.getLastOperationText());
+    const s = storeRef.current;
+    setSchema(s.activeSchema);
+    setMermaidCode(s.activeMermaidCode);
+    setCanUndo(s.activeCanUndo);
+    setCanRedo(s.activeCanRedo);
+    setLastOperation(s.activeLastOperation);
+    setBoards(s.list());
+    setActiveIndex(s.activeId);
   }, []);
 
   const setSchemaFromRaw = useCallback((raw: unknown) => {
-    const result = stateRef.current.setSchema(raw);
+    const result = storeRef.current.setSchema(raw);
     if (result.schema) refresh();
     return result;
   }, [refresh]);
 
   const undo = useCallback(() => {
-    if (stateRef.current.undo()) refresh();
+    if (storeRef.current.undo()) refresh();
   }, [refresh]);
 
   const redo = useCallback(() => {
-    if (stateRef.current.redo()) refresh();
+    if (storeRef.current.redo()) refresh();
   }, [refresh]);
 
   const clear = useCallback(() => {
-    if (stateRef.current.clear()) refresh();
+    if (storeRef.current.clear()) refresh();
   }, [refresh]);
 
-  const getContextJson = useCallback(() => stateRef.current.getContextJson(), []);
-  const getSummary = useCallback(() => stateRef.current.getSummary(), []);
-  const getContextForLLM = useCallback((input: string) => stateRef.current.getContextForLLM(input), []);
+  const addBoard = useCallback(() => {
+    if (storeRef.current.addBoard()) refresh();
+  }, [refresh]);
+
+  const removeBoard = useCallback((index: number) => {
+    if (storeRef.current.removeBoard(index)) refresh();
+  }, [refresh]);
+
+  const renameBoard = useCallback((index: number, name: string) => {
+    storeRef.current.renameBoard(index, name);
+    refresh();
+  }, [refresh]);
+
+  const switchBoard = useCallback((index: number) => {
+    storeRef.current.switchTo(index);
+    refresh();
+  }, [refresh]);
+
+  const getContextJson = useCallback(() => storeRef.current.active.getContextJson(), []);
+  const getSummary = useCallback(() => storeRef.current.active.getSummary(), []);
+  const getContextForLLM = useCallback((input: string) => storeRef.current.getContextForLLM(input), []);
 
   return {
     schema,
@@ -49,10 +77,16 @@ export function useDiagramState() {
     canUndo,
     canRedo,
     lastOperation,
+    boards,
+    activeIndex,
     setSchemaFromRaw,
     undo,
     redo,
     clear,
+    addBoard,
+    removeBoard,
+    renameBoard,
+    switchBoard,
     getContextJson,
     getSummary,
     getContextForLLM,
