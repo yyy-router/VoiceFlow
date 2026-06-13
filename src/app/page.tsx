@@ -12,16 +12,14 @@ import ExportButton from '@/components/ExportButton';
 export default function Home() {
   const { schema, mermaidCode, canUndo, canRedo, lastOperation, setSchemaFromRaw, undo, redo, clear, getContextForLLM } =
     useDiagramState();
-  const { sendToAgent, isLoading, statusMessage } = useDiagramAgent();
+  const { sendToAgent, isLoading, statusMessage, reasoningText } = useDiagramAgent();
   const speech = useSpeech();
-  const [combinedStatus, setCombinedStatus] = useState('');
   const [question, setQuestion] = useState('');
 
   const handleSpeech = useCallback(
     async (text: string) => {
-      setCombinedStatus('AI 正在理解指令...');
+      setQuestion('');
       const commands = await sendToAgent(getContextForLLM(text));
-      setCombinedStatus('');
 
       for (const cmd of commands) {
         switch (cmd.action) {
@@ -101,7 +99,8 @@ export default function Home() {
             isSupported={speech.isSupported}
             speechError={speech.error}
             isLoading={isLoading}
-            statusMessage={combinedStatus || statusMessage}
+            statusMessage={statusMessage}
+            reasoningText={reasoningText}
             question={question}
             startListening={speech.startListening}
             stopListening={speech.stopListening}

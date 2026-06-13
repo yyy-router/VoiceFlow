@@ -1,25 +1,23 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+
 interface AgentCommand {
   action: string;
   label?: string;
   payload: Record<string, unknown>;
 }
 
-export interface AgentStep {
-  type: 'thinking' | 'executing' | 'done';
-  message: string;
-}
-
 export function useDiagramAgent() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [reasoningText, setReasoningText] = useState('');
 
   const sendToAgent = useCallback(
     async (contextJson: string): Promise<AgentCommand[]> => {
       setIsLoading(true);
-      setStatusMessage('AI 正在理解指令...');
+      setStatusMessage('AI 正在思考...');
+      setReasoningText('');
 
       try {
         const res = await fetch('/api/agent', {
@@ -46,7 +44,9 @@ export function useDiagramAgent() {
             if (!line.startsWith('data: ')) continue;
             try {
               const event = JSON.parse(line.slice(6));
-              if (event.type === 'thinking' && event.message) {
+              if (event.type === 'reasoning' && event.text) {
+                setReasoningText((prev) => prev + event.text);
+              } else if (event.type === 'status' && event.message) {
                 setStatusMessage(event.message as string);
               } else if (event.type === 'commands') {
                 setStatusMessage('');
@@ -69,5 +69,5 @@ export function useDiagramAgent() {
     []
   );
 
-  return { sendToAgent, isLoading, statusMessage };
+  return { sendToAgent, isLoading, statusMessage, reasoningText };
 }

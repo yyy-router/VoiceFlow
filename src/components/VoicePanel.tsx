@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   speechError: string | null;
   isLoading: boolean;
   statusMessage: string;
+  reasoningText: string;
   question: string;
   startListening: () => void;
   stopListening: () => Promise<string>;
@@ -22,6 +23,7 @@ export default function VoicePanel({
   speechError,
   isLoading,
   statusMessage,
+  reasoningText,
   question,
   startListening,
   stopListening,
@@ -30,8 +32,16 @@ export default function VoicePanel({
 }: Props) {
   const [log, setLog] = useState<string[]>([]);
   const isHolding = useRef(false);
+  const reasoningEndRef = useRef<HTMLDivElement>(null);
 
   const addLog = useCallback((msg: string) => setLog((p) => [msg, ...p].slice(0, 50)), []);
+
+  // Auto-scroll reasoning to bottom as text streams in
+  useEffect(() => {
+    if (reasoningText && reasoningEndRef.current) {
+      reasoningEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [reasoningText]);
 
   const onDown = useCallback(() => {
     isHolding.current = true;
@@ -61,7 +71,7 @@ export default function VoicePanel({
   }
 
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col gap-5 h-full">
       {/* Mic button */}
       <button
         onPointerDown={onDown}
@@ -92,18 +102,44 @@ export default function VoicePanel({
         )}
       </button>
 
-      {/* Status message */}
-      {statusMessage && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent-light border border-accent/10 text-sm text-accent animate-fade-up">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          {statusMessage}
+      {/* Processing block: status + reasoning */}
+      {isLoading && (
+        <div className="animate-fade-up space-y-3">
+          {/* Status */}
+          {statusMessage && (
+            <div className="flex items-center gap-2.5 px-1">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
+              </span>
+              <span className="text-sm text-text-secondary font-medium">{statusMessage}</span>
+            </div>
+          )}
+
+          {/* Reasoning — editorial marginalia style */}
+          {reasoningText && (
+            <div className="relative rounded-xl bg-bg-muted/70 border border-border-light overflow-hidden max-h-48 overflow-y-auto">
+              {/* Left accent bar */}
+              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent/30" />
+              <div className="px-4 py-3">
+                <p className="text-[11px] font-medium text-text-muted tracking-wide mb-2">
+                  思考过程
+                </p>
+                <p className="text-[13px] text-text-secondary leading-relaxed whitespace-pre-wrap">
+                  {reasoningText}
+                  <span className="inline-block w-px h-[14px] bg-accent/50 ml-0.5 align-[-2px] animate-pulse" />
+                </p>
+                <div ref={reasoningEndRef} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Ask_user question */}
       {question && (
-        <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 animate-fade-up">
-          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl bg-amber-50/80 border border-amber-200/70 text-sm text-amber-800 animate-fade-up">
+          <svg className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           <span>{question}</span>
         </div>
       )}
