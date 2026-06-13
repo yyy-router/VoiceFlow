@@ -1,0 +1,78 @@
+import { describe, it, expect } from 'vitest';
+import { compileMermaid } from '../compiler';
+import { DiagramSchema } from '../schema';
+
+describe('compileMermaid — flowchart', () => {
+  it('should generate flowchart TD with nodes and edges', () => {
+    const schema: DiagramSchema = {
+      diagramType: 'flowchart',
+      nodes: [
+        { id: 'start', label: '开始', type: 'start' },
+        { id: 'login', label: '登录', type: 'process' },
+        { id: 'end', label: '结束', type: 'end' },
+      ],
+      edges: [
+        { from: 'start', to: 'login' },
+        { from: 'login', to: 'end', label: '成功' },
+      ],
+    };
+    const result = compileMermaid(schema);
+    expect(result).toContain('flowchart TD');
+    expect(result).toContain('start([开始])');
+    expect(result).toContain('login[登录]');
+    expect(result).toContain('end([结束])');
+    expect(result).toContain('start --> login');
+    expect(result).toContain('login -->|成功| end');
+  });
+
+  it('should use correct shapes for each type', () => {
+    const schema: DiagramSchema = {
+      diagramType: 'flowchart',
+      nodes: [
+        { id: 'n1', label: '判断', type: 'decision' },
+        { id: 'n2', label: '数据库', type: 'database' },
+        { id: 'n3', label: '服务', type: 'service' },
+      ],
+      edges: [],
+    };
+    const result = compileMermaid(schema);
+    expect(result).toContain('n1{判断}');
+    expect(result).toContain('n2[(数据库)]');
+    expect(result).toContain('n3[服务]');
+  });
+});
+
+describe('compileMermaid — architecture', () => {
+  it('should generate graph LR', () => {
+    const schema: DiagramSchema = {
+      diagramType: 'architecture',
+      nodes: [
+        { id: 'api', label: 'API网关', type: 'service' },
+        { id: 'db', label: '数据库', type: 'database' },
+      ],
+      edges: [{ from: 'api', to: 'db', label: '读写' }],
+    };
+    const result = compileMermaid(schema);
+    expect(result).toContain('graph LR');
+    expect(result).not.toContain('flowchart');
+    expect(result).toContain('api -->|读写| db');
+  });
+});
+
+describe('compileMermaid — ER', () => {
+  it('should generate erDiagram', () => {
+    const schema: DiagramSchema = {
+      diagramType: 'er',
+      nodes: [
+        { id: 'user', label: '用户表', type: 'entity' },
+        { id: 'order', label: '订单表', type: 'entity' },
+      ],
+      edges: [{ from: 'user', to: 'order', label: '下单' }],
+    };
+    const result = compileMermaid(schema);
+    expect(result).toContain('erDiagram');
+    expect(result).toContain('user {');
+    expect(result).toContain('int id PK');
+    expect(result).toContain('user ||--o{ order : "下单"');
+  });
+});
