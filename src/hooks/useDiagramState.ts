@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback } from 'react';
 import { DiagramState } from '@/core/diagram-state';
-import { DiagramSchema, DiagramPatch } from '@/core/schema';
+import { DiagramSchema } from '@/core/schema';
 
 export function useDiagramState() {
   const stateRef = useRef(new DiagramState());
@@ -20,11 +20,6 @@ export function useDiagramState() {
     setCanRedo(ds.canRedo);
     setLastOperation(ds.getLastOperationText());
   }, []);
-
-  const applyPatch = useCallback((patch: DiagramPatch) => {
-    stateRef.current.applyPatch(patch);
-    refresh();
-  }, [refresh]);
 
   const setSchemaFromRaw = useCallback((raw: unknown) => {
     const result = stateRef.current.setSchema(raw);
@@ -49,7 +44,6 @@ export function useDiagramState() {
     canUndo,
     canRedo,
     lastOperation,
-    applyPatch,
     setSchemaFromRaw,
     undo,
     redo,
