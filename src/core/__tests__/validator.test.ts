@@ -109,7 +109,7 @@ describe('validateSchema', () => {
     expect(result.errors.some(e => e.includes('自循环'))).toBe(true);
   });
 
-  it('should detect duplicate edges', () => {
+  it('should auto-deduplicate edges without error', () => {
     const schema: DiagramSchema = {
       diagramType: 'flowchart',
       nodes: [
@@ -122,8 +122,7 @@ describe('validateSchema', () => {
       ],
     };
     const result = validateSchema(schema);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.includes('重复边'))).toBe(true);
+    expect(result.valid).toBe(true);
   });
 
   it('should require at least one entity for ER', () => {

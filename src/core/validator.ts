@@ -3,6 +3,7 @@ import {
   Node, RawNode, DiagramPatch,
   ValidationResult,
 } from './schema';
+import { repairGraph } from './graph-repair';
 
 // ─── ID Generator ───
 function hash(str: string): string {
@@ -50,8 +51,13 @@ export function normalizeNode(raw: RawNode, index: number): Node {
 
 export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
   const nodeIds = new Set<string>();
-  const nodes: Node[] = raw.nodes.map((n, i) => {
-    let id = generateId(n, i + 1);
+  const nodes: Node[] = raw.nodes.map((n) => {
+    // Reuse LLM-provided ID if valid
+    if (n.id && !nodeIds.has(n.id)) {
+      nodeIds.add(n.id);
+      return { id: n.id, label: n.label, type: n.type };
+    }
+    let id = generateId(n, raw.nodes.indexOf(n) + 1);
     let dedup = id;
     let counter = 1;
     while (nodeIds.has(dedup)) dedup = `${id}_${++counter}`;
@@ -59,11 +65,11 @@ export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
     return { id: dedup, label: n.label, type: n.type };
   });
 
-  // Resolve edges via fuzzy match, not label Map
+  // Resolve edges: exact ID match first, then label match
   const edges = raw.edges.map(e => ({
     ...e,
-    from: resolveNode(e.from, nodes)?.id || e.from,
-    to: resolveNode(e.to, nodes)?.id || e.to,
+    from: nodeIds.has(e.from) ? e.from : (resolveNode(e.from, nodes)?.id || e.from),
+    to: nodeIds.has(e.to) ? e.to : (resolveNode(e.to, nodes)?.id || e.to),
   }));
 
   return { diagramType: raw.diagramType, title: raw.title, nodes, edges };
@@ -100,11 +106,18 @@ export function validateSchema(schema: DiagramSchema): ValidationResult {
     if (e.from === e.to)  errors.push(`自循环边: ${e.from} → ${e.to}`);
   }
 
-  const edgeKeys = new Set<string>();
+  // Deduplicate edges (warning only, not a hard error)
+  const seenEdges = new Set<string>();
+  const deduped: typeof schema.edges = [];
   for (const e of schema.edges) {
     const key = `${e.from}→${e.to}`;
-    if (edgeKeys.has(key)) errors.push(`重复边: ${key}`);
-    edgeKeys.add(key);
+    if (!seenEdges.has(key)) {
+      seenEdges.add(key);
+      deduped.push(e);
+    }
+  }
+  if (deduped.length < schema.edges.length) {
+    (schema as any).edges = deduped;
   }
 
   if (schema.diagramType === 'er' && schema.nodes.length === 0) {
@@ -155,7 +168,8 @@ export function processRawSchema(raw: unknown): { schema: DiagramSchema | null; 
   const parsed = parseSchema(raw);
   if (!parsed.schema) return { schema: null, errors: parsed.errors };
   const normalized = normalizeRawSchema(parsed.schema);
-  const validated = validateSchema(normalized);
+  const repaired = repairGraph(normalized);
+  const validated = validateSchema(repaired);
   if (!validated.valid) return { schema: null, errors: validated.errors };
-  return { schema: normalized, errors: [] };
+  return { schema: repaired, errors: [] };
 }

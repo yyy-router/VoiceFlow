@@ -12,10 +12,11 @@ export const NodeType = z.enum([
 ]);
 export type NodeType = z.infer<typeof NodeType>;
 
-// ─── LLM 输出节点（id 可选，建议提供语义 hint） ───
+// ─── LLM 输出节点（id 可选，LLM 可直接指定 id 或通过 id_hint 建议） ───
 export const RawNode = z.object({
   label: z.string().min(1),
   type: NodeType,
+  id: z.string().optional(),
   id_hint: z.string().optional(),
 });
 export type RawNode = z.infer<typeof RawNode>;
