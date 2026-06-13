@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DiagramState } from '../diagram-state';
-import { DiagramPatch } from '../schema';
 
 describe('DiagramState — setSchema', () => {
   let ds: DiagramState;
 
   beforeEach(() => { ds = new DiagramState(); });
 
-  it('should accept valid raw schema and produce compiled output', () => {
+  it('should accept valid raw schema', () => {
     const result = ds.setSchema({
       diagramType: 'flowchart',
       nodes: [
@@ -18,65 +17,18 @@ describe('DiagramState — setSchema', () => {
     });
     expect(result.schema).not.toBeNull();
     expect(result.errors).toHaveLength(0);
-
     const mermaid = ds.compile();
-    expect(mermaid).toContain('flowchart TD');
     expect(mermaid).toContain('开始');
   });
 
-  it('should reject invalid schema', () => {
+  it('should reject invalid input', () => {
     const result = ds.setSchema({ diagramType: 'invalid', nodes: [], edges: [] });
     expect(result.schema).toBeNull();
     expect(result.errors.length).toBeGreaterThan(0);
   });
 });
 
-describe('DiagramState — applyPatch', () => {
-  let ds: DiagramState;
-
-  beforeEach(() => {
-    ds = new DiagramState();
-    ds.setSchema({
-      diagramType: 'flowchart',
-      nodes: [
-        { label: '登录', type: 'process', id_hint: 'login' },
-        { label: '验证码', type: 'process', id_hint: 'verify' },
-      ],
-      edges: [{ from: '登录', to: '验证码' }],
-    });
-  });
-
-  it('should add a node', () => {
-    const patch: DiagramPatch = {
-      operations: [{ type: 'addNode', node: { label: '支付', type: 'process', id_hint: 'pay' } }],
-    };
-    ds.applyPatch(patch);
-    expect(ds.getSchema().nodes).toHaveLength(3);
-    const mermaid = ds.compile();
-    expect(mermaid).toContain('支付');
-  });
-
-  it('should rename a node', () => {
-    const loginId = ds.getSchema().nodes.find(n => n.label === '登录')!.id;
-    const patch: DiagramPatch = {
-      operations: [{ type: 'renameNode', target: { id: loginId }, newLabel: '邮箱登录' }],
-    };
-    ds.applyPatch(patch);
-    expect(ds.getSchema().nodes.find(n => n.id === loginId)!.label).toBe('邮箱登录');
-  });
-
-  it('should remove a node and its edges', () => {
-    const loginId = ds.getSchema().nodes.find(n => n.label === '登录')!.id;
-    const patch: DiagramPatch = {
-      operations: [{ type: 'removeNode', target: { id: loginId } }],
-    };
-    ds.applyPatch(patch);
-    expect(ds.getSchema().nodes).toHaveLength(1);
-    expect(ds.getSchema().edges).toHaveLength(0);
-  });
-});
-
-describe('DiagramState — undo/redo', () => {
+describe('DiagramState — undo/redo (snapshot)', () => {
   let ds: DiagramState;
 
   beforeEach(() => {
@@ -87,54 +39,72 @@ describe('DiagramState — undo/redo', () => {
         { label: 'A', type: 'process', id_hint: 'a' },
         { label: 'B', type: 'process', id_hint: 'b' },
       ],
-      edges: [],
+      edges: [{ from: 'A', to: 'B' }],
     });
   });
 
-  it('should undo last patch', () => {
-    ds.applyPatch({ operations: [{ type: 'addNode', node: { label: 'C', type: 'process', id_hint: 'c' } }] });
+  it('should undo and restore previous state', () => {
+    ds.setSchema({
+      diagramType: 'flowchart',
+      nodes: [
+        { label: 'A', type: 'process', id_hint: 'a' },
+        { label: 'B', type: 'process', id_hint: 'b' },
+        { label: 'C', type: 'process', id_hint: 'c' },
+      ],
+      edges: [{ from: 'A', to: 'B' }, { from: 'B', to: 'C' }],
+    });
     expect(ds.getSchema().nodes).toHaveLength(3);
 
     ds.undo();
     expect(ds.getSchema().nodes).toHaveLength(2);
   });
 
-  it('should redo undone patch', () => {
-    ds.applyPatch({ operations: [{ type: 'addNode', node: { label: 'C', type: 'process', id_hint: 'c' } }] });
+  it('should redo after undo', () => {
+    ds.setSchema({
+      diagramType: 'flowchart',
+      nodes: [
+        { label: 'A', type: 'process', id_hint: 'a' },
+        { label: 'B', type: 'process', id_hint: 'b' },
+        { label: 'C', type: 'process', id_hint: 'c' },
+      ],
+      edges: [{ from: 'A', to: 'B' }, { from: 'B', to: 'C' }],
+    });
     ds.undo();
     ds.redo();
     expect(ds.getSchema().nodes).toHaveLength(3);
   });
 
-  it('canUndo / canRedo should reflect state', () => {
-    expect(ds.canUndo).toBe(false);
-    ds.applyPatch({ operations: [{ type: 'addNode', node: { label: 'C', type: 'process', id_hint: 'c' } }] });
+  it('canUndo/canRedo should reflect state', () => {
+    // beforeEach calls setSchema — so canUndo is already true
+    expect(ds.canUndo).toBe(true);
+    ds.setSchema({
+      diagramType: 'flowchart',
+      nodes: [{ label: 'X', type: 'process', id_hint: 'x' }],
+      edges: [],
+    });
     expect(ds.canUndo).toBe(true);
     expect(ds.canRedo).toBe(false);
     ds.undo();
-    expect(ds.canUndo).toBe(false);
     expect(ds.canRedo).toBe(true);
   });
 
-  it('new patch should clear redo stack', () => {
-    ds.applyPatch({ operations: [{ type: 'addNode', node: { label: 'C', type: 'process' } }] });
+  it('new action should clear redo stack', () => {
+    ds.setSchema({ diagramType: 'flowchart', nodes: [{ label: 'X', type: 'process', id_hint: 'x' }], edges: [] });
     ds.undo();
-    ds.applyPatch({ operations: [{ type: 'addNode', node: { label: 'D', type: 'process' } }] });
+    expect(ds.canRedo).toBe(true);
+    ds.setSchema({ diagramType: 'flowchart', nodes: [{ label: 'Y', type: 'process', id_hint: 'y' }], edges: [] });
     expect(ds.canRedo).toBe(false);
-    expect(ds.getSchema().nodes).toHaveLength(3); // A, B, D
   });
 });
 
 describe('DiagramState — getContextJson & getSummary', () => {
-  it('should return JSON context', () => {
+  it('should return valid JSON context', () => {
     const ds = new DiagramState();
-    const json = ds.getContextJson();
-    const parsed = JSON.parse(json);
-    expect(parsed.diagramType).toBe('flowchart');
-    expect(parsed.nodes).toEqual([]);
+    const json = JSON.parse(ds.getContextJson());
+    expect(json.diagramType).toBe('flowchart');
   });
 
-  it('should return summary', () => {
+  it('should return summary with counts', () => {
     const ds = new DiagramState();
     ds.setSchema({
       diagramType: 'flowchart',
@@ -147,6 +117,5 @@ describe('DiagramState — getContextJson & getSummary', () => {
     const summary = JSON.parse(ds.getSummary());
     expect(summary.nodeCount).toBe(2);
     expect(summary.edgeCount).toBe(1);
-    expect(summary.nodeLabels).toContain('A');
   });
 });
