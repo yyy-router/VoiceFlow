@@ -1,6 +1,6 @@
-import { DiagramSchema } from './schema';
+import { DiagramSchema, NodeGraphSchema, SequenceSchema, isNodeGraph } from './schema';
 
-function sanitize(label: string): string {
+export function sanitize(label: string): string {
   return label
     .replace(/\(/g, '（')
     .replace(/\)/g, '）')
@@ -15,7 +15,15 @@ function safeColor(c: string): string | null {
   return VALID_COLOR.test(c) ? c : null;
 }
 
-const SHAPE_MAP: Record<string, [string, string]> = {
+function mermaidConfig(lines: string[], nodeCount: number): void {
+  if (nodeCount >= 8) {
+    lines.unshift('%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 40, "rankSpacing": 60}}}%%');
+  } else if (nodeCount >= 5) {
+    lines.unshift('%%{init: {"themeVariables": {"fontSize": "16px"}}}%%');
+  }
+}
+
+export const SHAPE_MAP: Record<string, [string, string]> = {
   start: ['([', '])'],
   process: ['[', ']'],
   decision: ['{', '}'],
@@ -26,15 +34,21 @@ const SHAPE_MAP: Record<string, [string, string]> = {
 };
 
 export function compileMermaid(schema: DiagramSchema): string {
-  switch (schema.diagramType) {
-    case 'flowchart':   return compileFlowchart(schema);
-    case 'architecture': return compileArchitecture(schema);
-    case 'er':          return compileER(schema);
+  if (isNodeGraph(schema)) {
+    switch (schema.diagramType) {
+      case 'flowchart':   return compileFlowchart(schema);
+      case 'architecture': return compileArchitecture(schema);
+      case 'er':          return compileER(schema);
+    }
   }
+  if (schema.diagramType === 'sequence') return compileSequence(schema);
+  const _exhaustive: never = schema;
+  return '';
 }
 
-function compileFlowchart(schema: DiagramSchema): string {
+export function compileFlowchart(schema: NodeGraphSchema): string {
   const lines: string[] = ['flowchart TD'];
+  mermaidConfig(lines, schema.nodes.length);
   for (const n of schema.nodes) {
     const [open, close] = SHAPE_MAP[n.type] || ['[', ']'];
     lines.push(`    ${n.id}${open}${sanitize(n.label)}${close}`);
@@ -43,7 +57,6 @@ function compileFlowchart(schema: DiagramSchema): string {
     const label = e.label ? `|${sanitize(e.label)}|` : '';
     lines.push(`    ${e.from} -->${label} ${e.to}`);
   }
-  // Node colors
   for (const n of schema.nodes) {
     if (n.color) {
       const c = safeColor(n.color);
@@ -53,8 +66,9 @@ function compileFlowchart(schema: DiagramSchema): string {
   return lines.join('\n');
 }
 
-function compileArchitecture(schema: DiagramSchema): string {
-  const lines: string[] = ['graph LR'];
+export function compileArchitecture(schema: NodeGraphSchema): string {
+  const lines: string[] = ['graph TB'];
+  mermaidConfig(lines, schema.nodes.length);
   for (const n of schema.nodes) {
     const [open, close] = SHAPE_MAP[n.type] || ['[', ']'];
     lines.push(`    ${n.id}${open}${sanitize(n.label)}${close}`);
@@ -63,7 +77,6 @@ function compileArchitecture(schema: DiagramSchema): string {
     const label = e.label ? `|${sanitize(e.label)}|` : '';
     lines.push(`    ${e.from} -->${label} ${e.to}`);
   }
-  // Node colors
   for (const n of schema.nodes) {
     if (n.color) {
       const c = safeColor(n.color);
@@ -73,7 +86,7 @@ function compileArchitecture(schema: DiagramSchema): string {
   return lines.join('\n');
 }
 
-function compileER(schema: DiagramSchema): string {
+export function compileER(schema: NodeGraphSchema): string {
   const lines: string[] = ['erDiagram'];
   const seen = new Set<string>();
   for (const n of schema.nodes) {
@@ -95,6 +108,21 @@ function compileER(schema: DiagramSchema): string {
     const tn = schema.nodes.find(n => n.id === e.to);
     const relabel = e.label || '关联';
     lines.push(`    ${sanitize(fn?.label || e.from)} ||--o{ ${sanitize(tn?.label || e.to)} : "${sanitize(relabel)}"`);
+  }
+  return lines.join('\n');
+}
+
+export function compileSequence(schema: SequenceSchema): string {
+  const lines: string[] = ['sequenceDiagram'];
+  for (const p of schema.participants) {
+    lines.push(`    participant ${sanitize(p.label)}`);
+  }
+  for (const m of schema.messages) {
+    const arrow = m.messageType === 'async' ? '-->>' :
+                  m.messageType === 'return' ? '-->>' : '->>';
+    const fromP = schema.participants.find(p => p.id === m.from);
+    const toP = schema.participants.find(p => p.id === m.to);
+    lines.push(`    ${sanitize(fromP?.label || m.from)}${arrow}${sanitize(toP?.label || m.to)}: ${sanitize(m.text)}`);
   }
   return lines.join('\n');
 }
