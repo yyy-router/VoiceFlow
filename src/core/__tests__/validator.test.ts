@@ -1,20 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeRawSchema, validateSchema, validatePatch, processRawSchema } from '../validator';
-import { RawDiagramSchema, DiagramSchema, DiagramPatch } from '../schema';
+import { RawNodeGraphSchema, NodeGraphSchema, DiagramPatch } from '../schema';
 
 describe('normalizeRawSchema', () => {
   it('should add ids to nodes using id_hint when provided', () => {
-    const raw: RawDiagramSchema = {
+    const raw: RawNodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [{ label: '登录', type: 'process', id_hint: 'login' }],
       edges: [],
     };
-    const result = normalizeRawSchema(raw);
+    const result = normalizeRawSchema(raw) as any;
     expect(result.nodes[0].id).toMatch(/^login_[a-f0-9]{4}$/);
   });
 
   it('should generate hash-based ids without hint', () => {
-    const raw: RawDiagramSchema = {
+    const raw: RawNodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { label: '节点A', type: 'process' },
@@ -22,7 +22,7 @@ describe('normalizeRawSchema', () => {
       ],
       edges: [],
     };
-    const result = normalizeRawSchema(raw);
+    const result = normalizeRawSchema(raw) as any;
     expect(result.nodes).toHaveLength(2);
     expect(result.nodes[0].id).toMatch(/^node_1_[a-f0-9]{4}$/);
     expect(result.nodes[1].id).toMatch(/^node_2_[a-f0-9]{4}$/);
@@ -31,7 +31,7 @@ describe('normalizeRawSchema', () => {
   });
 
   it('should deduplicate ids when same label appears', () => {
-    const raw: RawDiagramSchema = {
+    const raw: RawNodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { label: '节点', type: 'process' },
@@ -39,12 +39,12 @@ describe('normalizeRawSchema', () => {
       ],
       edges: [],
     };
-    const result = normalizeRawSchema(raw);
+    const result = normalizeRawSchema(raw) as any;
     expect(result.nodes[0].id).not.toBe(result.nodes[1].id);
   });
 
   it('should resolve edge references using fuzzy label match', () => {
-    const raw: RawDiagramSchema = {
+    const raw: RawNodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { label: '登录', type: 'process', id_hint: 'login' },
@@ -52,7 +52,7 @@ describe('normalizeRawSchema', () => {
       ],
       edges: [{ from: '登录', to: '验证码' }],
     };
-    const result = normalizeRawSchema(raw);
+    const result = normalizeRawSchema(raw) as any;
     const loginNode = result.nodes[0];
     const verifyNode = result.nodes[1];
     expect(result.edges[0].from).toBe(loginNode.id);
@@ -62,7 +62,7 @@ describe('normalizeRawSchema', () => {
 
 describe('validateSchema', () => {
   it('should pass valid schema', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'a', label: 'A', type: 'process' },
@@ -74,7 +74,7 @@ describe('validateSchema', () => {
   });
 
   it('should detect duplicate node ids', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'a', label: 'A', type: 'process' },
@@ -88,7 +88,7 @@ describe('validateSchema', () => {
   });
 
   it('should detect edges referencing missing nodes', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [{ id: 'a', label: 'A', type: 'process' }],
       edges: [{ from: 'a', to: 'missing' }],
@@ -99,7 +99,7 @@ describe('validateSchema', () => {
   });
 
   it('should detect self-loop edges', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [{ id: 'a', label: 'A', type: 'process' }],
       edges: [{ from: 'a', to: 'a' }],
@@ -110,7 +110,7 @@ describe('validateSchema', () => {
   });
 
   it('should auto-deduplicate edges without error', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'a', label: 'A', type: 'process' },
@@ -126,7 +126,7 @@ describe('validateSchema', () => {
   });
 
   it('should require at least one entity for ER', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'er',
       nodes: [],
       edges: [],
@@ -138,7 +138,7 @@ describe('validateSchema', () => {
 });
 
 describe('validatePatch', () => {
-  const schema: DiagramSchema = {
+  const schema: NodeGraphSchema = {
     diagramType: 'flowchart',
     nodes: [
       { id: 'a', label: '登录', type: 'process' },
@@ -188,12 +188,12 @@ describe('processRawSchema — full pipeline', () => {
     expect(result.schema).not.toBeNull();
     expect(result.errors).toHaveLength(0);
     expect(result.schema!.diagramType).toBe('flowchart');
-    expect(result.schema!.nodes).toHaveLength(2);
-    expect(result.schema!.edges).toHaveLength(1);
+    expect((result.schema as any).nodes).toHaveLength(2);
+    expect((result.schema as any).edges).toHaveLength(1);
   });
 
   it('should return errors for invalid input', () => {
-    const result = processRawSchema({ diagramType: 'invalid', nodes: [], edges: [] });
+    const result = processRawSchema({ diagramType: 'invalid' } as any);
     expect(result.schema).toBeNull();
     expect(result.errors.length).toBeGreaterThan(0);
   });

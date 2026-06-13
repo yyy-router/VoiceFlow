@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { compileMermaid } from '../compiler';
-import { DiagramSchema } from '../schema';
+import { NodeGraphSchema } from '../schema';
 
 describe('compileMermaid — flowchart', () => {
   it('should generate flowchart TD with nodes and edges', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'start', label: '开始', type: 'start' },
@@ -26,7 +26,7 @@ describe('compileMermaid — flowchart', () => {
   });
 
   it('should use correct shapes for each type', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'n1', label: '判断', type: 'decision' },
@@ -44,7 +44,7 @@ describe('compileMermaid — flowchart', () => {
 
 describe('compileMermaid — architecture', () => {
   it('should generate graph LR', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'architecture',
       nodes: [
         { id: 'api', label: 'API网关', type: 'service' },
@@ -61,7 +61,7 @@ describe('compileMermaid — architecture', () => {
 
 describe('compileMermaid — ER', () => {
   it('should generate erDiagram', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'er',
       nodes: [
         { id: 'user', label: '用户表', type: 'entity', attributes: [{ name: '用户ID', type: 'int' }, { name: '昵称', type: 'string' }] },

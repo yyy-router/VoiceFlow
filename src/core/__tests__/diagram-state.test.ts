@@ -53,10 +53,10 @@ describe('DiagramState — undo/redo (snapshot)', () => {
       ],
       edges: [{ from: 'A', to: 'B' }, { from: 'B', to: 'C' }],
     });
-    expect(ds.getSchema().nodes).toHaveLength(3);
+    expect((ds.getSchema() as any).nodes).toHaveLength(3);
 
     ds.undo();
-    expect(ds.getSchema().nodes).toHaveLength(2);
+    expect((ds.getSchema() as any).nodes).toHaveLength(2);
   });
 
   it('should redo after undo', () => {
@@ -71,7 +71,7 @@ describe('DiagramState — undo/redo (snapshot)', () => {
     });
     ds.undo();
     ds.redo();
-    expect(ds.getSchema().nodes).toHaveLength(3);
+    expect((ds.getSchema() as any).nodes).toHaveLength(3);
   });
 
   it('canUndo/canRedo should reflect state', () => {
