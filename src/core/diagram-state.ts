@@ -1,220 +1,168 @@
-import { DiagramNode, DiagramEdge, DiagramStateData, DiagramCommand, LastOperation, LayoutDirection } from './types';
+import { DiagramSchema, DiagramPatch, PatchOp, Node } from './schema';
+import { compileMermaid } from './compiler';
+import { processRawSchema } from './validator';
 
-interface Snapshot {
-  nodes: DiagramNode[];
-  edges: DiagramEdge[];
-  type: DiagramStateData['type'];
-  direction: LayoutDirection;
+// ─── Patch Application & Inverse Logic ───
+function resolveNodeByTarget(target: { id?: string; label?: string }, nodes: Node[]): Node | null {
+  if (target.id) {
+    const m = nodes.find(n => n.id === target.id);
+    if (m) return m;
+  }
+  if (target.label) {
+    const m = nodes.find(n => n.label === target.label);
+    if (m) return m;
+  }
+  return null;
 }
 
-export class DiagramState {
-  private nodes: DiagramNode[] = [];
-  private edges: DiagramEdge[] = [];
-  private type: DiagramStateData['type'] = 'flowchart';
-  private direction: LayoutDirection = 'TD';
-  private undoStack: Snapshot[] = [];
-  private redoStack: Snapshot[] = [];
-  private lastOperation: LastOperation | null = null;
-  private nextId = 1;
-
-  private genId(): string {
-    return `node_${this.nextId++}`;
-  }
-
-  private snapshot(): Snapshot {
-    return {
-      nodes: this.nodes.map((n) => ({ ...n })),
-      edges: this.edges.map((e) => ({ ...e })),
-      type: this.type,
-      direction: this.direction,
-    };
-  }
-
-  private restore(s: Snapshot): void {
-    this.nodes = s.nodes.map((n) => ({ ...n }));
-    this.edges = s.edges.map((e) => ({ ...e }));
-    this.type = s.type;
-    this.direction = s.direction;
-  }
-
-  private pushUndo(): void {
-    this.undoStack.push(this.snapshot());
-    this.redoStack = [];
-  }
-
-  private findNode(label: string): DiagramNode | undefined {
-    const exact = this.nodes.find((n) => n.label === label);
-    if (exact) return exact;
-    return this.nodes.find((n) => n.label.includes(label) || label.includes(n.label));
-  }
-
-  applyCommand(cmd: DiagramCommand): void {
-    const needsExisting: DiagramCommand['action'][] = ['delete_node', 'rename_node', 'change_node_shape', 'add_edge', 'delete_edge', 'move_node'];
-    if (needsExisting.includes(cmd.action) && this.nodes.length === 0) return;
-
-    switch (cmd.action) {
-      case 'create_diagram': {
-        this.pushUndo();
-        this.type = (cmd.payload.diagram_type as DiagramStateData['type']) || 'flowchart';
-        this.nodes = [];
-        this.edges = [];
-        this.direction = 'TD';
-        this.lastOperation = { action: 'create_diagram' };
-        break;
+function applyOp(schema: DiagramSchema, op: PatchOp): PatchOp {
+  switch (op.type) {
+    case 'addNode': {
+      // Find if already exists by label
+      const exist = schema.nodes.find(n => n.label === op.node.label);
+      if (exist) {
+        // Already exists → no-op, but still return inverse
+        return { type: 'removeNode', target: { id: exist.id } };
       }
-      case 'add_node': {
-        this.pushUndo();
-        const label = (cmd.payload.label as string) || '';
-        const shape = cmd.payload.shape as DiagramNode['shape'];
-        const id = this.genId();
-        this.nodes.push({ id, label, shape });
-        this.lastOperation = { action: 'add_node', nodeLabel: label, nodeId: id };
-        break;
+      const newId = generateNodeId(op.node, schema.nodes.length + 1);
+      const node: Node = { id: newId, label: op.node.label, type: op.node.type };
+      schema.nodes.push(node);
+      return { type: 'removeNode', target: { id: node.id } };
+    }
+    case 'removeNode': {
+      const node = resolveNodeByTarget(op.target, schema.nodes);
+      if (!node) return { type: 'addNode', node: { label: op.target.label || op.target.id || '', type: 'process' } };
+      schema.nodes = schema.nodes.filter(n => n.id !== node.id);
+      schema.edges = schema.edges.filter(e => e.from !== node.id && e.to !== node.id);
+      return { type: 'addNode', node: { label: node.label, type: node.type, id_hint: node.id } };
+    }
+    case 'renameNode': {
+      const node = resolveNodeByTarget(op.target, schema.nodes);
+      if (!node) return { type: 'renameNode', target: { id: op.target.id || '' }, newLabel: op.target.label || '' };
+      const oldLabel = node.label;
+      node.label = op.newLabel;
+      return { type: 'renameNode', target: { id: node.id }, newLabel: oldLabel };
+    }
+    case 'addEdge': {
+      const exists = schema.edges.some(e => e.from === op.edge.from && e.to === op.edge.to);
+      if (exists) return { type: 'removeEdge', from: op.edge.from, to: op.edge.to };
+      schema.edges.push({ ...op.edge });
+      return { type: 'removeEdge', from: op.edge.from, to: op.edge.to };
+    }
+    case 'removeEdge': {
+      if (!schema.edges.some(e => e.from === op.from && e.to === op.to)) {
+        return { type: 'addEdge', edge: { from: op.from, to: op.to } };
       }
-      case 'delete_node': {
-        const target = (cmd.payload.label as string) || '';
-        const node = this.findNode(target);
-        if (!node) return;
-        this.pushUndo();
-        this.edges = this.edges.filter((e) => e.from !== node.id && e.to !== node.id);
-        this.nodes = this.nodes.filter((n) => n.id !== node.id);
-        this.lastOperation = { action: 'delete_node', nodeLabel: node.label, nodeId: node.id };
-        break;
-      }
-      case 'rename_node': {
-        const oldLabel = (cmd.payload.old_label as string) || '';
-        const newLabel = (cmd.payload.new_label as string) || '';
-        const node = this.findNode(oldLabel);
-        if (!node) return;
-        this.pushUndo();
-        node.label = newLabel;
-        this.lastOperation = { action: 'rename_node', nodeLabel: newLabel, nodeId: node.id };
-        break;
-      }
-      case 'change_node_shape': {
-        const label = (cmd.payload.label as string) || '';
-        const shape = cmd.payload.shape as DiagramNode['shape'];
-        const node = this.findNode(label);
-        if (!node || !shape) return;
-        this.pushUndo();
-        node.shape = shape;
-        this.lastOperation = { action: 'change_node_shape', nodeLabel: node.label, nodeId: node.id };
-        break;
-      }
-      case 'add_edge': {
-        const from = (cmd.payload.from as string) || '';
-        const to = (cmd.payload.to as string) || '';
-        const relabel = cmd.payload.label as string | undefined;
-        const fromNode = this.findNode(from);
-        const toNode = this.findNode(to);
-        if (!fromNode || !toNode) return;
-        if (this.edges.some((e) => e.from === fromNode.id && e.to === toNode.id)) return;
-        this.pushUndo();
-        this.edges.push({ from: fromNode.id, to: toNode.id, label: relabel });
-        this.lastOperation = { action: 'add_edge' };
-        break;
-      }
-      case 'delete_edge': {
-        const from = (cmd.payload.from as string) || '';
-        const to = (cmd.payload.to as string) || '';
-        const fromNode = this.findNode(from);
-        const toNode = this.findNode(to);
-        if (!fromNode || !toNode) return;
-        this.pushUndo();
-        this.edges = this.edges.filter((e) => !(e.from === fromNode.id && e.to === toNode.id));
-        this.lastOperation = { action: 'delete_edge' };
-        break;
-      }
-      case 'move_node': {
-        const target = (cmd.payload.target as string) || '';
-        const position = (cmd.payload.position as string) || 'after';
-        const reference = (cmd.payload.reference as string) || '';
-        const node = this.findNode(target);
-        const refNode = this.findNode(reference);
-        if (!node || !refNode) return;
-        this.pushUndo();
-        const curIdx = this.nodes.findIndex((n) => n.id === node.id);
-        const refIdx = this.nodes.findIndex((n) => n.id === refNode.id);
-        if (curIdx === -1 || refIdx === -1) return;
-        this.nodes.splice(curIdx, 1);
-        const insertAt = position === 'after' ? refIdx + 1 : refIdx;
-        this.nodes.splice(curIdx < refIdx ? insertAt - 1 : insertAt, 0, node);
-        this.lastOperation = { action: 'move_node', nodeLabel: node.label, nodeId: node.id };
-        break;
-      }
-      case 'layout_diagram': {
-        const dir = (cmd.payload.direction as LayoutDirection) || 'TD';
-        this.pushUndo();
-        this.direction = dir;
-        this.lastOperation = { action: 'layout_diagram' };
-        break;
-      }
-      case 'undo': {
-        const snap = this.undoStack.pop();
-        if (!snap) return;
-        this.redoStack.push(this.snapshot());
-        this.restore(snap);
-        this.lastOperation = { action: 'undo' };
-        break;
-      }
-      case 'redo': {
-        const snap = this.redoStack.pop();
-        if (!snap) return;
-        this.undoStack.push(this.snapshot());
-        this.restore(snap);
-        this.lastOperation = { action: 'redo' };
-        break;
-      }
+      schema.edges = schema.edges.filter(e => !(e.from === op.from && e.to === op.to));
+      return { type: 'addEdge', edge: { from: op.from, to: op.to } };
     }
   }
+}
 
-  getState(): DiagramStateData {
-    return { type: this.type, direction: this.direction, nodes: this.nodes, edges: this.edges };
+function generateNodeId(raw: { label: string; id_hint?: string }, index: number): string {
+  let h = 5381;
+  for (let i = 0; i < raw.label.length; i++) h = (h * 33) ^ raw.label.charCodeAt(i);
+  const hash = (h >>> 0).toString(16).slice(0, 4);
+
+  if (raw.id_hint) {
+    const hint = raw.id_hint
+      .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    if (hint) return `${hint}_${hash}`;
+  }
+  return `node_${index}_${hash}`;
+}
+
+function describePatch(patch: DiagramPatch): string {
+  const labels: Record<string, string> = {
+    addNode: '添加节点', removeNode: '删除节点', renameNode: '重命名节点',
+    addEdge: '添加连线', removeEdge: '删除连线',
+  };
+  const ops = patch.operations.map(op => labels[op.type] || op.type);
+  return ops.join('、');
+}
+
+interface UndoEntry {
+  forward: DiagramPatch;
+  inverse: DiagramPatch;
+}
+
+// ─── DiagramState ───
+export class DiagramState {
+  private schema: DiagramSchema = { diagramType: 'flowchart', nodes: [], edges: [] };
+  private undoStack: UndoEntry[] = [];
+  private redoStack: UndoEntry[] = [];
+  private lastOpText = '无';
+
+  private execOps(ops: PatchOp[]): PatchOp[] {
+    const inverses: PatchOp[] = [];
+    for (const op of [...ops].reverse()) {
+      inverses.unshift(applyOp(this.schema, op));
+    }
+    return inverses;
+  }
+
+  applyPatch(patch: DiagramPatch): void {
+    const inverses = this.execOps(patch.operations);
+    this.redoStack = [];
+    this.undoStack.push({ forward: patch, inverse: { operations: inverses } });
+    this.lastOpText = describePatch(patch);
+  }
+
+  setSchema(raw: unknown): { schema: DiagramSchema | null; errors: string[] } {
+    const result = processRawSchema(raw);
+    if (result.schema) {
+      this.schema = result.schema;
+      this.undoStack = [];
+      this.redoStack = [];
+      this.lastOpText = '创建了图';
+    }
+    return result;
+  }
+
+  getSchema(): DiagramSchema {
+    return this.schema;
+  }
+
+  compile(): string {
+    return compileMermaid(this.schema);
   }
 
   getContextJson(): string {
+    return JSON.stringify(this.schema);
+  }
+
+  getSummary(): string {
     return JSON.stringify({
-      type: this.type,
-      direction: this.direction,
-      nodes: this.nodes.map((n) => ({ id: n.id, label: n.label, shape: n.shape || 'rectangle' })),
-      edges: this.edges.map((e) => ({
-        from: e.from,
-        to: e.to,
-        fromLabel: this.nodes.find((n) => n.id === e.from)?.label || e.from,
-        toLabel: this.nodes.find((n) => n.id === e.to)?.label || e.to,
-        label: e.label,
-      })),
+      diagramType: this.schema.diagramType,
+      title: this.schema.title,
+      nodeCount: this.schema.nodes.length,
+      edgeCount: this.schema.edges.length,
+      nodeLabels: this.schema.nodes.map(n => n.label),
     });
   }
 
-  getLastOperation(): LastOperation | null {
-    return this.lastOperation;
-  }
-
   getLastOperationText(): string {
-    if (!this.lastOperation) return '无';
-    const { action, nodeLabel } = this.lastOperation;
-    const map: Record<string, string> = {
-      create_diagram: '创建了图',
-      add_node: `添加了"${nodeLabel}"节点`,
-      delete_node: `删除了"${nodeLabel}"节点`,
-      rename_node: `重命名为"${nodeLabel}"`,
-      change_node_shape: `修改了"${nodeLabel}"的形状`,
-      add_edge: '添加了连线',
-      delete_edge: '删除了连线',
-      move_node: `移动了"${nodeLabel}"节点`,
-      layout_diagram: '改变了布局方向',
-      undo: '撤销了上一步',
-      redo: '恢复了上一步',
-    };
-    return map[action] || action;
+    return this.lastOpText;
   }
 
-  get canUndo(): boolean {
-    return this.undoStack.length > 0;
+  undo(): boolean {
+    const entry = this.undoStack.pop();
+    if (!entry) return false;
+    this.execOps(entry.inverse.operations);
+    this.redoStack.push(entry);
+    this.lastOpText = '撤销了上一步';
+    return true;
   }
 
-  get canRedo(): boolean {
-    return this.redoStack.length > 0;
+  redo(): boolean {
+    const entry = this.redoStack.pop();
+    if (!entry) return false;
+    this.execOps(entry.forward.operations);
+    this.undoStack.push(entry);
+    this.lastOpText = '恢复了上一步';
+    return true;
   }
+
+  get canUndo(): boolean { return this.undoStack.length > 0; }
+  get canRedo(): boolean { return this.redoStack.length > 0; }
 }
