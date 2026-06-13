@@ -10,28 +10,32 @@ import DiagramCanvas from '@/components/DiagramCanvas';
 import ExportButton from '@/components/ExportButton';
 
 export default function Home() {
-  const { schema, mermaidCode, canUndo, canRedo, lastOperation, setSchemaFromRaw, undo, redo, getContextJson } =
+  const { schema, mermaidCode, canUndo, canRedo, lastOperation, setSchemaFromRaw, undo, redo, clear, getContextForLLM } =
     useDiagramState();
   const { sendToAgent, isLoading, statusMessage } = useDiagramAgent();
   const speech = useSpeech();
   const [combinedStatus, setCombinedStatus] = useState('');
+  const [question, setQuestion] = useState('');
 
   const handleSpeech = useCallback(
     async (text: string) => {
       setCombinedStatus('AI 正在理解指令...');
-      const commands = await sendToAgent(text, getContextJson(), lastOperation);
+      const commands = await sendToAgent(getContextForLLM(text));
       setCombinedStatus('');
 
       for (const cmd of commands) {
         switch (cmd.action) {
-          case 'ask_user':
+          case 'ask_user': {
+            const q = cmd.payload.question as string;
+            setQuestion(q);
             if ('speechSynthesis' in window) {
-              const u = new SpeechSynthesisUtterance(cmd.payload.question as string);
+              const u = new SpeechSynthesisUtterance(q);
               u.lang = 'zh-CN';
               u.rate = 1.1;
               speechSynthesis.speak(u);
             }
             break;
+          }
           case 'generate_diagram': {
             const result = setSchemaFromRaw(cmd.payload);
             if (!result.schema) {
@@ -45,10 +49,13 @@ export default function Home() {
           case 'redo':
             redo();
             break;
+          case 'clear':
+            clear();
+            break;
         }
       }
     },
-    [sendToAgent, getContextJson, lastOperation, setSchemaFromRaw, undo, redo]
+    [sendToAgent, getContextForLLM, setSchemaFromRaw, undo, redo, clear]
   );
 
   return (
@@ -95,6 +102,7 @@ export default function Home() {
             speechError={speech.error}
             isLoading={isLoading}
             statusMessage={combinedStatus || statusMessage}
+            question={question}
             startListening={speech.startListening}
             stopListening={speech.stopListening}
             onSpeechResult={handleSpeech}

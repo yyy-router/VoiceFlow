@@ -9,6 +9,7 @@ interface Props {
   speechError: string | null;
   isLoading: boolean;
   statusMessage: string;
+  question: string;
   startListening: () => void;
   stopListening: () => Promise<string>;
   onSpeechResult: (text: string) => void;
@@ -21,6 +22,7 @@ export default function VoicePanel({
   speechError,
   isLoading,
   statusMessage,
+  question,
   startListening,
   stopListening,
   onSpeechResult,
@@ -95,6 +97,14 @@ export default function VoicePanel({
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent-light border border-accent/10 text-sm text-accent animate-fade-up">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           {statusMessage}
+        </div>
+      )}
+
+      {/* Ask_user question */}
+      {question && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 animate-fade-up">
+          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>{question}</span>
         </div>
       )}
 
