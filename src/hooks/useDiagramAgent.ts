@@ -17,7 +17,7 @@ export function useDiagramAgent() {
   const [statusMessage, setStatusMessage] = useState('');
 
   const sendToAgent = useCallback(
-    async (userInput: string, diagramStateJson: string, lastOperation: string): Promise<AgentCommand[]> => {
+    async (contextJson: string): Promise<AgentCommand[]> => {
       setIsLoading(true);
       setStatusMessage('AI 正在理解指令...');
 
@@ -25,7 +25,7 @@ export function useDiagramAgent() {
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userInput, diagramStateJson, lastOperation }),
+          body: contextJson,
         });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
