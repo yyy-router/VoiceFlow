@@ -12,12 +12,20 @@ export const NodeType = z.enum([
 ]);
 export type NodeType = z.infer<typeof NodeType>;
 
+// ─── ER 实体属性 ───
+export const EntityAttribute = z.object({
+  name: z.string().min(1),
+  type: z.string().optional(),
+});
+export type EntityAttribute = z.infer<typeof EntityAttribute>;
+
 // ─── LLM 输出节点（id 可选，LLM 可直接指定 id 或通过 id_hint 建议） ───
 export const RawNode = z.object({
   label: z.string().min(1),
   type: NodeType,
   id: z.string().optional(),
   id_hint: z.string().optional(),
+  attributes: z.array(EntityAttribute).optional(),
 });
 export type RawNode = z.infer<typeof RawNode>;
 

@@ -55,14 +55,14 @@ export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
     // Reuse LLM-provided ID if valid
     if (n.id && !nodeIds.has(n.id)) {
       nodeIds.add(n.id);
-      return { id: n.id, label: n.label, type: n.type };
+      return { id: n.id, label: n.label, type: n.type, attributes: n.attributes };
     }
     let id = generateId(n, raw.nodes.indexOf(n) + 1);
     let dedup = id;
     let counter = 1;
     while (nodeIds.has(dedup)) dedup = `${id}_${++counter}`;
     nodeIds.add(dedup);
-    return { id: dedup, label: n.label, type: n.type };
+    return { id: dedup, label: n.label, type: n.type, attributes: n.attributes };
   });
 
   // Resolve edges: exact ID match first, then label match
