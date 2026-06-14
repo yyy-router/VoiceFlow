@@ -28,7 +28,10 @@ export class DiagramState {
         this.redoStack = [];
         this.schema = repaired;
       } else {
-        this.logAction('update', `sequence:${result.schema.participants.length}p`);
+        const s = result.schema as any;
+        const count = s.participants?.length ?? 0;
+        const label = 'sequence';
+        this.logAction('update', `${label}:${count}`);
         this.undoStack.push(structuredClone(this.schema));
         this.redoStack = [];
         this.schema = result.schema;
@@ -62,7 +65,7 @@ export class DiagramState {
       summary.edge_count = s.edges.length;
       summary.labels = s.nodes.map(n => n.label);
       summary.nodes = s.nodes.map(n => ({
-        label: n.label, id: n.id, type: n.type, color: n.color, attributes: n.attributes,
+        label: n.label, id: n.id, type: n.type, color: n.color, group: n.group, attributes: n.attributes,
       }));
       summary.edges = s.edges.map(e => ({
         from: e.from, to: e.to, label: e.label,

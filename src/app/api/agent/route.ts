@@ -110,11 +110,12 @@ export async function POST(request: NextRequest) {
 
         const nodeDetails = summary.nodes?.length > 0
           ? summary.nodes.map((n: any) => {
+              const groupStr = n.group ? ` [${n.group}]` : '';
               const colorStr = n.color ? ` color=${n.color}` : '';
               const attrStr = n.attributes?.length > 0
-                ? ` [${n.attributes.map((a: any) => `${a.type || 'string'} ${a.name}`).join(', ')}]`
+                ? ` (${n.attributes.map((a: any) => `${a.type || 'string'} ${a.name}`).join(', ')})`
                 : '';
-              return `  - ${n.label}(${n.type})${colorStr}${attrStr}`;
+              return `  - ${n.label}(${n.type})${groupStr}${colorStr}${attrStr}`;
             }).join('\n')
           : summary.participants?.length > 0
             ? summary.participants.map((p: any) => `  - ${p.label}`).join('\n')
