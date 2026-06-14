@@ -43,19 +43,20 @@ describe('compileMermaid — flowchart', () => {
 });
 
 describe('compileMermaid — architecture', () => {
-  it('should generate graph LR', () => {
+  it('should generate subgraph-based architecture', () => {
     const schema: NodeGraphSchema = {
       diagramType: 'architecture',
       nodes: [
-        { id: 'api', label: 'API网关', type: 'service' },
-        { id: 'db', label: '数据库', type: 'database' },
+        { id: 'api', label: 'API网关', type: 'service', group: '网关层' },
+        { id: 'user', label: '用户服务', type: 'service', group: '服务层' },
+        { id: 'db', label: '数据库', type: 'database', group: '数据层' },
       ],
-      edges: [{ from: 'api', to: 'db', label: '读写' }],
+      edges: [{ from: 'api', to: 'user' }, { from: 'user', to: 'db' }],
     };
     const result = compileMermaid(schema);
-    expect(result).toContain('graph TB');
-    expect(result).not.toContain('flowchart');
-    expect(result).toContain('api -->|读写| db');
+    expect(result).toContain('flowchart LR');
+    expect(result).toContain('subgraph');
+    expect(result).toContain('网关层');
   });
 });
 

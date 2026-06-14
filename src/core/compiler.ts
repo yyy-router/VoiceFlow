@@ -2,6 +2,8 @@ import { DiagramSchema, NodeGraphSchema, SequenceSchema, isNodeGraph } from './s
 
 export function sanitize(label: string): string {
   return label
+    .replace(/\\n/g, ' ')
+    .replace(/\n/g, ' ')
     .replace(/\(/g, '（')
     .replace(/\)/g, '）')
     .replace(/\[/g, '【')
@@ -54,7 +56,7 @@ export function compileMermaid(schema: DiagramSchema): string {
   if (isNodeGraph(schema)) {
     switch (schema.diagramType) {
       case 'flowchart':   return compileFlowchart(schema);
-      case 'architecture': return compileArchitecture(schema);
+      case 'architecture': return compileArchitectureSubgraph(schema);
       case 'er':          return compileER(schema);
     }
   }
@@ -81,20 +83,52 @@ export function compileFlowchart(schema: NodeGraphSchema): string {
   return lines.join('\n');
 }
 
-export function compileArchitecture(schema: NodeGraphSchema): string {
-  const lines: string[] = ['graph TB'];
-  mermaidConfig(lines, schema.nodes.length);
+const GROUP_PALETTE = ['#d5f5e3', '#d6eaf8', '#fdebd0', '#e8daef', '#fadbd8', '#d5dbdb'];
+const GROUP_BG = ['#eafaf1', '#ebf5fb', '#fef5e7', '#f4ecf7', '#fdedec', '#eaecec'];
+
+export function compileArchitectureSubgraph(schema: NodeGraphSchema): string {
+  const lines: string[] = ['flowchart LR'];
+  // Group nodes by group field
+  const groups = new Map<string, typeof schema.nodes>();
+  const ungrouped: typeof schema.nodes = [];
   for (const n of schema.nodes) {
+    if (n.group) {
+      if (!groups.has(n.group)) groups.set(n.group, []);
+      groups.get(n.group)!.push(n);
+    } else {
+      ungrouped.push(n);
+    }
+  }
+
+  let gi = 0;
+  for (const [groupName, groupNodes] of groups) {
+    const gid = `group_${gi}`;
+    const color = (n: { color?: string | null }) => n.color ? safeColor(n.color) : null;
+    lines.push(`    subgraph ${gid}["${sanitize(groupName)}"]`);
+    for (const n of groupNodes) {
+      const c = color(n) || GROUP_PALETTE[gi % GROUP_PALETTE.length];
+      const [open, close] = SHAPE_MAP[n.type] || ['[', ']'];
+      lines.push(`      ${n.id}${open}${sanitize(n.label)}${close}`);
+      lines.push(`      style ${n.id} fill:${c}`);
+    }
+    lines.push('    end');
+    const bg = schema.groupColors?.[groupName] || GROUP_BG[gi % GROUP_BG.length];
+    lines.push(`    style ${gid} fill:${bg},stroke:#d0d0d0`);
+    gi++;
+  }
+
+  // Ungrouped nodes
+  for (const n of ungrouped) {
+    const c = n.color ? safeColor(n.color) : null;
     const [open, close] = SHAPE_MAP[n.type] || ['[', ']'];
     lines.push(`    ${n.id}${open}${sanitize(n.label)}${close}`);
+    if (c) lines.push(`    style ${n.id} fill:${c}`);
   }
+
+  // Edges
   for (const e of schema.edges) {
     const label = e.label ? `|${sanitize(e.label)}|` : '';
     lines.push(`    ${e.from} -->${label} ${e.to}`);
-  }
-  for (const n of schema.nodes) {
-    const c = n.color ? safeColor(n.color) : (DEFAULT_COLOR[n.type] || null);
-    if (c) lines.push(`    style ${n.id} fill:${c}`);
   }
   return lines.join('\n');
 }
