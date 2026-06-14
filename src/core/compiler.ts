@@ -15,6 +15,23 @@ function safeColor(c: string): string | null {
   return VALID_COLOR.test(c) ? c : null;
 }
 
+// const DEFAULT_COLOR: Record<string, string> = {
+//   start: '#EEF4FF',
+//   process: '#E7F0FF',
+//   decision: '#DCE8FF',
+//   end: '#D2E2FF',
+//   service: '#C7DBFF',
+//   database: '#BCD3FF',
+// };
+export const DEFAULT_COLOR: Record<string, string> = {
+ start: '#DCFCE7',
+  process: '#E0F2FE',
+  decision: '#FEF3C7',
+  end: '#FEE2E2',
+  service: '#EDE9FE',
+  database: '#F3F4F6',
+};
+
 function mermaidConfig(lines: string[], nodeCount: number): void {
   if (nodeCount >= 8) {
     lines.unshift('%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 40, "rankSpacing": 60}}}%%');
@@ -58,10 +75,8 @@ export function compileFlowchart(schema: NodeGraphSchema): string {
     lines.push(`    ${e.from} -->${label} ${e.to}`);
   }
   for (const n of schema.nodes) {
-    if (n.color) {
-      const c = safeColor(n.color);
-      if (c) lines.push(`    style ${n.id} fill:${c}`);
-    }
+    const c = n.color ? safeColor(n.color) : (DEFAULT_COLOR[n.type] || null);
+    if (c) lines.push(`    style ${n.id} fill:${c}`);
   }
   return lines.join('\n');
 }
@@ -78,10 +93,8 @@ export function compileArchitecture(schema: NodeGraphSchema): string {
     lines.push(`    ${e.from} -->${label} ${e.to}`);
   }
   for (const n of schema.nodes) {
-    if (n.color) {
-      const c = safeColor(n.color);
-      if (c) lines.push(`    style ${n.id} fill:${c}`);
-    }
+    const c = n.color ? safeColor(n.color) : (DEFAULT_COLOR[n.type] || null);
+    if (c) lines.push(`    style ${n.id} fill:${c}`);
   }
   return lines.join('\n');
 }
