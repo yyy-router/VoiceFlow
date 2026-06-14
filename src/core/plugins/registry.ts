@@ -59,8 +59,10 @@ export async function initPlugins(): Promise<void> {
   const { flowchartPlugin } = await import('./flowchart.plugin');
   const { erPlugin } = await import('./er.plugin');
   const { architecturePlugin } = await import('./architecture.plugin');
+  const { sequencePlugin } = await import('./sequence.plugin');
 
   registerPlugin(flowchartPlugin);
   registerPlugin(erPlugin);
   registerPlugin(architecturePlugin);
+  registerPlugin(sequencePlugin);
 }
