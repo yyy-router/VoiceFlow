@@ -60,9 +60,11 @@ export async function initPlugins(): Promise<void> {
   const { erPlugin } = await import('./er.plugin');
   const { architecturePlugin } = await import('./architecture.plugin');
   const { sequencePlugin } = await import('./sequence.plugin');
+  const { mindmapPlugin } = await import('./mindmap.plugin');
 
   registerPlugin(flowchartPlugin);
   registerPlugin(erPlugin);
   registerPlugin(architecturePlugin);
   registerPlugin(sequencePlugin);
+  registerPlugin(mindmapPlugin);
 }
