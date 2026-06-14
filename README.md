@@ -30,25 +30,25 @@ VoiceFlow Agent 通过大语言模型与实时语音识别技术，实现"说一
 
 用户："创建一个用户登录流程图"
 
-<img src="E:\code_store\VoiceFlowAgent\README.assets\流程图演示.gif" alt="流程图演示" style="zoom:33%;" />
+![流程图演示](README.assets/流程图演示.gif)
 
 ### 语音创建 ER 图
 
 用户："创建用户表和订单表，并建立一对多关系"
 
-<img src="E:\code_store\VoiceFlowAgent\README.assets\ER图演示.gif" alt="ER图演示" style="zoom:33%;" />
+![ER图演示](README.assets/ER图演示.gif)
 
 ### 语音创建架构图
 
 用户："画一个微服务系统架构图，包含前端层、网关层、服务层、数据层"
 
-<img src="E:\code_store\VoiceFlowAgent\README.assets\架构图演示.gif" alt="架构图演示" style="zoom:33%;" />
+![架构图演示](README.assets/架构图演示.gif)
 
 ### 语音创建思维导图
 
 用户："画一个前端技术栈思维导图"
 
-<img src="E:\code_store\VoiceFlowAgent\README.assets\思维导图演示.gif" alt="思维导图演示" style="zoom:33%;" />
+![思维导图演示](README.assets/思维导图演示.gif)
 
 ---
 
@@ -130,7 +130,7 @@ interface DiagramPlugin {
 
 ## 项目架构
 
-<img src="E:\code_store\VoiceFlowAgent\README.assets\系统架构图.svg" alt="系统架构图" style="zoom:200%;" />
+![系统架构图](README.assets/系统架构图.svg)
 
 ### 目录结构
 
