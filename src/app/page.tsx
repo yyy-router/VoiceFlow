@@ -29,17 +29,9 @@ export default function Home() {
 
       for (const cmd of commands) {
         switch (cmd.action) {
-          case 'ask_user': {
-            const q = cmd.payload.question as string;
-            setQuestion(q);
-            if ('speechSynthesis' in window) {
-              const u = new SpeechSynthesisUtterance(q);
-              u.lang = 'zh-CN';
-              u.rate = 1.1;
-              speechSynthesis.speak(u);
-            }
+          case 'ask_user':
+            setQuestion(cmd.payload.question as string);
             break;
-          }
           case 'generate_diagram': {
             const result = setSchemaFromRaw(cmd.payload);
             if (!result.schema) {

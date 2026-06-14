@@ -49,38 +49,83 @@ export function normalizeNode(raw: RawNode, index: number): Node {
 }
 
 export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
+  if (raw.diagramType === 'mindmap') {
+    const rawM = raw as any;
+    let idx = 0;
+    const normNode = (rn: any): any => ({
+      id: rn.id || rn.id_hint || `node${++idx}`,
+      label: rn.label,
+      color: rn.color,
+      children: rn.children?.map(normNode),
+    });
+    return { diagramType: 'mindmap', title: raw.title, root: normNode(rawM.root) } as any;
+  }
+
   if (raw.diagramType === 'sequence') {
-    // Normalize sequence: generate IDs for participants
-    const participants = (raw as any).participants.map((p: any, i: number) => ({
+    // Normalize sequence: generate IDs and resolve message references
+    const rawSeq = raw as any;
+    const participants = rawSeq.participants.map((p: any, i: number) => ({
       id: p.id || p.id_hint || `p${i + 1}`,
       label: p.label,
     }));
-    return { diagramType: 'sequence', title: raw.title, participants, messages: (raw as any).messages };
+
+    // Build label → id lookup
+    const labelToId = new Map<string, string>();
+    for (const p of participants) {
+      labelToId.set(p.label, p.id);
+      // Also store id_hint → id for fuzzy matching
+      if ((rawSeq.participants as any[])[participants.indexOf(p)]?.id_hint) {
+        labelToId.set((rawSeq.participants as any[])[participants.indexOf(p)].id_hint, p.id);
+      }
+    }
+
+    // Resolve message from/to from label to ID
+    const messages = rawSeq.messages.map((m: any) => {
+      let fromId = labelToId.get(m.from) || m.from;
+      let toId = labelToId.get(m.to) || m.to;
+      // Fuzzy: try to match by partial label
+      if (!labelToId.has(m.from)) {
+        for (const p of participants) {
+          if (p.label.includes(m.from) || m.from.includes(p.label)) { fromId = p.id; break; }
+        }
+      }
+      if (!labelToId.has(m.to)) {
+        for (const p of participants) {
+          if (p.label.includes(m.to) || m.to.includes(p.label)) { toId = p.id; break; }
+        }
+      }
+      return { ...m, from: fromId, to: toId };
+    });
+
+    return { diagramType: 'sequence', title: raw.title, participants, messages };
   }
 
-  // Normalize node-graph types
+  // Normalize node-graph types (flowchart / er / architecture)
   const rawNG = raw as any;
   const nodeIds = new Set<string>();
-  const nodes: Node[] = rawNG.nodes.map((n: any) => {
+  const hintToId = new Map<string, string>(); // id_hint → generated id
+  const nodes: Node[] = rawNG.nodes.map((n: any, i: number) => {
     if (n.id && !nodeIds.has(n.id)) {
       nodeIds.add(n.id);
-      return { id: n.id, label: n.label, type: n.type, color: n.color, attributes: n.attributes };
+      if (n.id_hint) hintToId.set(n.id_hint, n.id);
+      return { id: n.id, label: n.label, type: n.type, color: n.color, group: n.group, attributes: n.attributes };
     }
-    let id = generateId(n, rawNG.nodes.indexOf(n) + 1);
+    let id = generateId(n, i + 1);
     let dedup = id;
     let counter = 1;
     while (nodeIds.has(dedup)) dedup = `${id}_${++counter}`;
     nodeIds.add(dedup);
-    return { id: dedup, label: n.label, type: n.type, color: n.color, attributes: n.attributes };
+    if (n.id_hint) hintToId.set(n.id_hint, dedup);
+    return { id: dedup, label: n.label, type: n.type, color: n.color, group: n.group, attributes: n.attributes };
   });
 
   const edges = rawNG.edges.map((e: any) => ({
     ...e,
-    from: nodeIds.has(e.from) ? e.from : (resolveNode(e.from, nodes)?.id || e.from),
-    to: nodeIds.has(e.to) ? e.to : (resolveNode(e.to, nodes)?.id || e.to),
+    from: nodeIds.has(e.from) ? e.from : (hintToId.get(e.from) || resolveNode(e.from, nodes)?.id || e.from),
+    to: nodeIds.has(e.to) ? e.to : (hintToId.get(e.to) || resolveNode(e.to, nodes)?.id || e.to),
   }));
 
-  return { diagramType: rawNG.diagramType, title: raw.title, nodes, edges };
+  return { diagramType: rawNG.diagramType, title: raw.title, nodes, edges, groupColors: rawNG.groupColors };
 }
 
 // ─── Parse ───
@@ -158,14 +203,14 @@ function validateSequence(schema: any): ValidationResult {
 
 // ─── Validate Schema (dispatches by type) ───
 export function validateSchema(schema: DiagramSchema): ValidationResult {
-  if (schema.diagramType === 'sequence') return validateSequence(schema);
-  return validateNodeGraph(schema);
+  if (schema.diagramType === 'sequence' || schema.diagramType === 'mindmap') return { valid: true, errors: [] };
+  return validateNodeGraph(schema as any);
 }
 
 // ─── Validate Patch ───
 export function validatePatch(schema: DiagramSchema, patch: DiagramPatch, updatedNodes: Node[] = []): ValidationResult {
-  if (schema.diagramType === 'sequence') {
-    return { valid: true, errors: [] }; // patches not supported for sequence
+  if (schema.diagramType === 'sequence' || schema.diagramType === 'mindmap') {
+    return { valid: true, errors: [] };
   }
   const errors: string[] = [];
   const nodeIds = new Set(schema.nodes.map(n => n.id));
@@ -213,6 +258,9 @@ export function processRawSchema(raw: unknown): { schema: DiagramSchema | null; 
     if (!validated.valid) return { schema: null, errors: validated.errors };
     return { schema: repaired, errors: [] };
   }
+
+  // Mindmap (no repair needed)
+  if (normalized.diagramType === 'mindmap') return { schema: normalized, errors: [] };
 
   // Validate sequence (no repair needed)
   const validated = validateSequence(normalized);

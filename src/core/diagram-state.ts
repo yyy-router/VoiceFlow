@@ -28,7 +28,10 @@ export class DiagramState {
         this.redoStack = [];
         this.schema = repaired;
       } else {
-        this.logAction('update', `sequence:${result.schema.participants.length}p`);
+        const s = result.schema as any;
+        const count = s.participants?.length ?? 1;
+        const label = 'sequence';
+        this.logAction('update', `${label}:${count}`);
         this.undoStack.push(structuredClone(this.schema));
         this.redoStack = [];
         this.schema = result.schema;
@@ -62,17 +65,21 @@ export class DiagramState {
       summary.edge_count = s.edges.length;
       summary.labels = s.nodes.map(n => n.label);
       summary.nodes = s.nodes.map(n => ({
-        label: n.label, id: n.id, type: n.type, color: n.color, attributes: n.attributes,
+        label: n.label, id: n.id, type: n.type, color: n.color, group: n.group, attributes: n.attributes,
       }));
       summary.edges = s.edges.map(e => ({
         from: e.from, to: e.to, label: e.label,
       }));
-    } else {
+    } else if ('participants' in s) {
       summary.node_count = s.participants.length;
       summary.edge_count = s.messages.length;
       summary.labels = s.participants.map(p => p.label);
       summary.participants = s.participants;
       summary.messages = s.messages;
+    } else {
+      // mindmap — pass full tree so LLM can preserve existing branches
+      summary.labels = [s.root.label];
+      summary.root = s.root;
     }
     return JSON.stringify({
       context: {
@@ -102,7 +109,10 @@ export class DiagramState {
     if ('nodes' in s) {
       return JSON.stringify({ ...base, nodeCount: s.nodes.length, edgeCount: s.edges.length, nodeLabels: s.nodes.map(n => n.label) });
     }
-    return JSON.stringify({ ...base, participantCount: s.participants.length, messageCount: s.messages.length });
+    if ('participants' in s) {
+      return JSON.stringify({ ...base, participantCount: s.participants.length, messageCount: s.messages.length });
+    }
+    return JSON.stringify({ ...base, rootLabel: (s as any).root?.label });
   }
 
   getLastOperationText(): string {
@@ -138,7 +148,8 @@ export class DiagramState {
   clear(): boolean {
     const s = this.schema as any;
     const isEmpty = s.nodes ? (s.nodes.length === 0 && s.edges.length === 0)
-      : (s.participants?.length ?? 0) === 0 && (s.messages?.length ?? 0) === 0;
+      : s.participants ? ((s.participants?.length ?? 0) === 0 && (s.messages?.length ?? 0) === 0)
+      : !s.root;
     if (isEmpty) return false;
     this.undoStack.push(structuredClone(this.schema));
     this.redoStack = [];

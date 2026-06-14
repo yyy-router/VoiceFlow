@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RawNode, Node, RawDiagramSchema, DiagramSchema, DiagramPatch } from '../schema';
+import { RawNode, Node, RawDiagramSchema, DiagramSchema, DiagramPatch, RawMindmapSchema, MindmapSchema } from '../schema';
 
 describe('RawNode', () => {
   it('should accept valid node without id_hint', () => {
@@ -97,5 +97,47 @@ describe('DiagramPatch', () => {
       ],
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('RawMindmapSchema', () => {
+  it('should accept valid mindmap with recursive children', () => {
+    const result = RawMindmapSchema.safeParse({
+      diagramType: 'mindmap',
+      root: {
+        label: '中心主题',
+        children: [
+          { label: '分支A' },
+          { label: '分支B', children: [{ label: '子节点' }] },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject mindmap without root label', () => {
+    const result = RawMindmapSchema.safeParse({
+      diagramType: 'mindmap',
+      root: { children: [] },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('MindmapSchema', () => {
+  it('should require id on nodes', () => {
+    const result = MindmapSchema.safeParse({
+      diagramType: 'mindmap',
+      root: { id: 'root', label: '主题' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject nodes without id', () => {
+    const result = MindmapSchema.safeParse({
+      diagramType: 'mindmap',
+      root: { label: '主题' },
+    });
+    expect(result.success).toBe(false);
   });
 });

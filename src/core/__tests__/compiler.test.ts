@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compileMermaid } from '../compiler';
+import { compileMermaid, compileMindmap } from '../compiler';
 import { NodeGraphSchema } from '../schema';
 
 describe('compileMermaid — flowchart', () => {
@@ -43,19 +43,20 @@ describe('compileMermaid — flowchart', () => {
 });
 
 describe('compileMermaid — architecture', () => {
-  it('should generate graph LR', () => {
+  it('should generate subgraph-based architecture', () => {
     const schema: NodeGraphSchema = {
       diagramType: 'architecture',
       nodes: [
-        { id: 'api', label: 'API网关', type: 'service' },
-        { id: 'db', label: '数据库', type: 'database' },
+        { id: 'api', label: 'API网关', type: 'service', group: '网关层' },
+        { id: 'user', label: '用户服务', type: 'service', group: '服务层' },
+        { id: 'db', label: '数据库', type: 'database', group: '数据层' },
       ],
-      edges: [{ from: 'api', to: 'db', label: '读写' }],
+      edges: [{ from: 'api', to: 'user' }, { from: 'user', to: 'db' }],
     };
     const result = compileMermaid(schema);
-    expect(result).toContain('graph LR');
-    expect(result).not.toContain('flowchart');
-    expect(result).toContain('api -->|读写| db');
+    expect(result).toContain('flowchart LR');
+    expect(result).toContain('subgraph');
+    expect(result).toContain('网关层');
   });
 });
 
@@ -75,5 +76,34 @@ describe('compileMermaid — ER', () => {
     expect(result).toContain('int 用户ID');
     expect(result).toContain('string 昵称');
     expect(result).toContain('下单');
+  });
+});
+
+describe('compileMermaid — mindmap', () => {
+  it('should generate mindmap with root and children', () => {
+    const schema = {
+      diagramType: 'mindmap' as const,
+      root: {
+        id: 'root', label: 'Python学习',
+        children: [
+          { id: 'basics', label: '基础语法' },
+          { id: 'data', label: '数据分析', children: [{ id: 'pandas', label: 'Pandas' }] },
+        ],
+      },
+    };
+    const result = compileMindmap(schema);
+    expect(result).toContain('mindmap');
+    expect(result).toContain('((Python学习))');
+    expect(result).toContain('[基础语法]');
+    expect(result).toContain('[Pandas]');
+  });
+
+  it('should not include style directives (mindmap does not support them)', () => {
+    const schema = {
+      diagramType: 'mindmap' as const,
+      root: { id: 'r', label: '主题', color: '#FF6B6B', children: [{ id: 'c', label: '分支' }] },
+    };
+    const result = compileMindmap(schema);
+    expect(result).not.toContain('style');
   });
 });
