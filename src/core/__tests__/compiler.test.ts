@@ -53,7 +53,7 @@ describe('compileMermaid — architecture', () => {
       edges: [{ from: 'api', to: 'db', label: '读写' }],
     };
     const result = compileMermaid(schema);
-    expect(result).toContain('graph LR');
+    expect(result).toContain('graph TB');
     expect(result).not.toContain('flowchart');
     expect(result).toContain('api -->|读写| db');
   });
