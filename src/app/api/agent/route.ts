@@ -119,7 +119,14 @@ export async function POST(request: NextRequest) {
             }).join('\n')
           : summary.participants?.length > 0
             ? summary.participants.map((p: any) => `  - ${p.label}`).join('\n')
-            : '  无';
+            : summary.root
+              ? (function renderTree(n: any, d: number): string {
+                  const prefix = '  '.repeat(d + 1);
+                  let out = `${prefix}- ${n.label}\n`;
+                  if (n.children) for (const c of n.children) out += renderTree(c, d + 1);
+                  return out;
+                })(summary.root, 0).trimEnd()
+              : '  无';
 
         const edgeDetails = summary.edges?.length > 0
           ? summary.edges.map((e: any) => {
