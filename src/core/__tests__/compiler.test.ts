@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compileMermaid } from '../compiler';
+import { compileMermaid, compileMindmap } from '../compiler';
 import { NodeGraphSchema } from '../schema';
 
 describe('compileMermaid — flowchart', () => {
@@ -76,5 +76,34 @@ describe('compileMermaid — ER', () => {
     expect(result).toContain('int 用户ID');
     expect(result).toContain('string 昵称');
     expect(result).toContain('下单');
+  });
+});
+
+describe('compileMermaid — mindmap', () => {
+  it('should generate mindmap with root and children', () => {
+    const schema = {
+      diagramType: 'mindmap' as const,
+      root: {
+        id: 'root', label: 'Python学习',
+        children: [
+          { id: 'basics', label: '基础语法' },
+          { id: 'data', label: '数据分析', children: [{ id: 'pandas', label: 'Pandas' }] },
+        ],
+      },
+    };
+    const result = compileMindmap(schema);
+    expect(result).toContain('mindmap');
+    expect(result).toContain('((Python学习))');
+    expect(result).toContain('[基础语法]');
+    expect(result).toContain('[Pandas]');
+  });
+
+  it('should not include style directives (mindmap does not support them)', () => {
+    const schema = {
+      diagramType: 'mindmap' as const,
+      root: { id: 'r', label: '主题', color: '#FF6B6B', children: [{ id: 'c', label: '分支' }] },
+    };
+    const result = compileMindmap(schema);
+    expect(result).not.toContain('style');
   });
 });

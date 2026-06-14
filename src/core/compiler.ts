@@ -1,4 +1,4 @@
-import { DiagramSchema, NodeGraphSchema, SequenceSchema, isNodeGraph } from './schema';
+import { DiagramSchema, NodeGraphSchema, SequenceSchema, MindmapNode, isNodeGraph } from './schema';
 
 export function sanitize(label: string): string {
   return label
@@ -61,6 +61,7 @@ export function compileMermaid(schema: DiagramSchema): string {
     }
   }
   if (schema.diagramType === 'sequence') return compileSequence(schema);
+  if (schema.diagramType === 'mindmap') return compileMindmap(schema as any);
   const _exhaustive: never = schema;
   return '';
 }
@@ -171,5 +172,32 @@ export function compileSequence(schema: SequenceSchema): string {
     const toP = schema.participants.find(p => p.id === m.to);
     lines.push(`    ${sanitize(fromP?.label || m.from)}${arrow}${sanitize(toP?.label || m.to)}: ${sanitize(m.text)}`);
   }
+  return lines.join('\n');
+}
+
+function compileMindmapTree(node: MindmapNode, lines: string[], depth: number): void {
+  const prefix = '    '.repeat(depth);
+  const shape = depth === 0 ? `((${sanitize(node.label)}))` : `[${sanitize(node.label)}]`;
+  lines.push(`${prefix}${shape}`);
+  if (node.children) {
+    for (const child of node.children) {
+      compileMindmapTree(child, lines, depth + 1);
+    }
+  }
+}
+
+export function compileMindmap(schema: { root: MindmapNode; title?: string }): string {
+  const lines: string[] = [
+    '%%{init: {"theme": "base", "themeVariables": {',
+    '  "primaryColor": "#FF8C42",',
+    '  "primaryTextColor": "#fff",',
+    '  "primaryBorderColor": "#E07B30",',
+    '  "secondaryColor": "#B8E6E1",',
+    '  "tertiaryColor": "#E8F5E9",',
+    '  "lineColor": "#B0BEC5"',
+    '}}}%%',
+    'mindmap',
+  ];
+  compileMindmapTree(schema.root, lines, 0);
   return lines.join('\n');
 }
