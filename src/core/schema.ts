@@ -26,6 +26,7 @@ export const RawNode = z.object({
   id: z.string().optional(),
   id_hint: z.string().optional(),
   color: z.string().optional(),
+  group: z.string().optional(),
   attributes: z.array(EntityAttribute).optional(),
 });
 export type RawNode = z.infer<typeof RawNode>;
@@ -50,6 +51,7 @@ export const NodeGraphSchema = z.object({
   title: z.string().optional(),
   nodes: z.array(Node),
   edges: z.array(Edge),
+  groupColors: z.record(z.string(), z.string()).optional(),
 });
 export type NodeGraphSchema = z.infer<typeof NodeGraphSchema>;
 
@@ -63,8 +65,88 @@ export const RawNodeGraphSchema = z.object({
     to: z.string(),
     label: z.string().optional(),
   })),
+  groupColors: z.record(z.string(), z.string()).optional(),
 });
 export type RawNodeGraphSchema = z.infer<typeof RawNodeGraphSchema>;
+
+// ─── Architecture Beta Diagram ───
+export const ArchGroup = z.object({
+  id: z.string().min(1),
+  icon: z.string().min(1),
+  title: z.string().min(1),
+  parent: z.string().optional(),
+});
+export type ArchGroup = z.infer<typeof ArchGroup>;
+
+export const ArchService = z.object({
+  id: z.string().min(1),
+  icon: z.string().min(1),
+  title: z.string().min(1),
+  group: z.string().optional(),
+});
+export type ArchService = z.infer<typeof ArchService>;
+
+export const ArchJunction = z.object({
+  id: z.string().min(1),
+  group: z.string().optional(),
+});
+export type ArchJunction = z.infer<typeof ArchJunction>;
+
+export const ArchEdge = z.object({
+  from: z.string().min(1),
+  fromSide: z.enum(['T', 'B', 'L', 'R']).optional(),
+  to: z.string().min(1),
+  toSide: z.enum(['T', 'B', 'L', 'R']).optional(),
+  arrow: z.boolean().optional(),
+});
+export type ArchEdge = z.infer<typeof ArchEdge>;
+
+export const ArchitectureBetaSchema = z.object({
+  diagramType: z.literal('architecture'),
+  title: z.string().optional(),
+  groups: z.array(ArchGroup).optional(),
+  services: z.array(ArchService),
+  junctions: z.array(ArchJunction).optional(),
+  edges: z.array(ArchEdge),
+});
+export type ArchitectureBetaSchema = z.infer<typeof ArchitectureBetaSchema>;
+
+// Raw (LLM output, IDs optional)
+export const RawArchGroup = z.object({
+  id: z.string().optional(),
+  id_hint: z.string().optional(),
+  icon: z.string().min(1),
+  title: z.string().min(1),
+  parent: z.string().optional(),
+});
+
+export const RawArchService = z.object({
+  id: z.string().optional(),
+  id_hint: z.string().optional(),
+  icon: z.string().min(1),
+  title: z.string().min(1),
+  group: z.string().optional(),
+});
+
+export const RawArchitectureBetaSchema = z.object({
+  diagramType: z.literal('architecture'),
+  title: z.string().optional(),
+  groups: z.array(RawArchGroup).optional(),
+  services: z.array(RawArchService),
+  junctions: z.array(z.object({
+    id: z.string().optional(),
+    id_hint: z.string().optional(),
+    group: z.string().optional(),
+  })).optional(),
+  edges: z.array(z.object({
+    from: z.string().min(1),
+    fromSide: z.enum(['T', 'B', 'L', 'R']).optional(),
+    to: z.string().min(1),
+    toSide: z.enum(['T', 'B', 'L', 'R']).optional(),
+    arrow: z.boolean().optional(),
+  })),
+});
+export type RawArchitectureBetaSchema = z.infer<typeof RawArchitectureBetaSchema>;
 
 // ─── Sequence Diagram ───
 export const SequenceParticipant = z.object({

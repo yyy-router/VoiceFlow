@@ -88,29 +88,32 @@ export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
     return { diagramType: 'sequence', title: raw.title, participants, messages };
   }
 
-  // Normalize node-graph types
+  // Normalize node-graph types (flowchart / er / architecture)
   const rawNG = raw as any;
   const nodeIds = new Set<string>();
-  const nodes: Node[] = rawNG.nodes.map((n: any) => {
+  const hintToId = new Map<string, string>(); // id_hint → generated id
+  const nodes: Node[] = rawNG.nodes.map((n: any, i: number) => {
     if (n.id && !nodeIds.has(n.id)) {
       nodeIds.add(n.id);
-      return { id: n.id, label: n.label, type: n.type, color: n.color, attributes: n.attributes };
+      if (n.id_hint) hintToId.set(n.id_hint, n.id);
+      return { id: n.id, label: n.label, type: n.type, color: n.color, group: n.group, attributes: n.attributes };
     }
-    let id = generateId(n, rawNG.nodes.indexOf(n) + 1);
+    let id = generateId(n, i + 1);
     let dedup = id;
     let counter = 1;
     while (nodeIds.has(dedup)) dedup = `${id}_${++counter}`;
     nodeIds.add(dedup);
-    return { id: dedup, label: n.label, type: n.type, color: n.color, attributes: n.attributes };
+    if (n.id_hint) hintToId.set(n.id_hint, dedup);
+    return { id: dedup, label: n.label, type: n.type, color: n.color, group: n.group, attributes: n.attributes };
   });
 
   const edges = rawNG.edges.map((e: any) => ({
     ...e,
-    from: nodeIds.has(e.from) ? e.from : (resolveNode(e.from, nodes)?.id || e.from),
-    to: nodeIds.has(e.to) ? e.to : (resolveNode(e.to, nodes)?.id || e.to),
+    from: nodeIds.has(e.from) ? e.from : (hintToId.get(e.from) || resolveNode(e.from, nodes)?.id || e.from),
+    to: nodeIds.has(e.to) ? e.to : (hintToId.get(e.to) || resolveNode(e.to, nodes)?.id || e.to),
   }));
 
-  return { diagramType: rawNG.diagramType, title: raw.title, nodes, edges };
+  return { diagramType: rawNG.diagramType, title: raw.title, nodes, edges, groupColors: rawNG.groupColors };
 }
 
 // ─── Parse ───
@@ -189,13 +192,13 @@ function validateSequence(schema: any): ValidationResult {
 // ─── Validate Schema (dispatches by type) ───
 export function validateSchema(schema: DiagramSchema): ValidationResult {
   if (schema.diagramType === 'sequence') return validateSequence(schema);
-  return validateNodeGraph(schema);
+  return validateNodeGraph(schema as any);
 }
 
 // ─── Validate Patch ───
 export function validatePatch(schema: DiagramSchema, patch: DiagramPatch, updatedNodes: Node[] = []): ValidationResult {
   if (schema.diagramType === 'sequence') {
-    return { valid: true, errors: [] }; // patches not supported for sequence
+    return { valid: true, errors: [] };
   }
   const errors: string[] = [];
   const nodeIds = new Set(schema.nodes.map(n => n.id));
