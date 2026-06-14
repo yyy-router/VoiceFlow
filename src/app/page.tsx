@@ -113,8 +113,8 @@ export default function Home() {
             onSpeechResult={handleSpeech}
             stateInfo={{
               type: schema.diagramType || '未创建',
-              nodeCount: schema.nodes.length,
-              edgeCount: schema.edges.length,
+              nodeCount: 'nodes' in schema ? schema.nodes.length : (schema as any).participants?.length ?? 0,
+              edgeCount: 'nodes' in schema ? schema.edges.length : (schema as any).messages?.length ?? 0,
               lastOp: lastOperation,
             }}
           />

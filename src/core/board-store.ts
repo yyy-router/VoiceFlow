@@ -85,7 +85,7 @@ export class BoardStore {
     return this.boards.map((b, i) => ({
       name: this.names[i],
       type: b.getSchema().diagramType,
-      nodeCount: b.getSchema().nodes.length,
+      nodeCount: (b.getSchema() as any).nodes?.length ?? (b.getSchema() as any).participants?.length ?? 0,
     }));
   }
 
@@ -161,11 +161,12 @@ export class BoardStore {
   private deriveName(schema: DiagramSchema): string {
     if (schema.title) return schema.title;
     const typeLabel: Record<string, string> = {
-      flowchart: '流程图', er: 'ER图', architecture: '架构图',
+      flowchart: '流程图', er: 'ER图', architecture: '架构图', sequence: '时序图',
     };
-    return schema.nodes.length > 0
-      ? `${typeLabel[schema.diagramType] || '图表'} - ${schema.nodes[0].label}`
-      : this.names[this.activeIndex];
+    if ('nodes' in schema && schema.nodes.length > 0) {
+      return `${typeLabel[schema.diagramType] || '图表'} - ${schema.nodes[0].label}`;
+    }
+    return typeLabel[schema.diagramType] || this.names[this.activeIndex];
   }
 
   private save(): void {

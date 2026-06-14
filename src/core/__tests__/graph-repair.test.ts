@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { repairGraph } from '../graph-repair';
-import { DiagramSchema } from '../schema';
+import { NodeGraphSchema } from '../schema';
 
 describe('repairGraph', () => {
   it('should connect orphan node to existing graph', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'start', label: '开始', type: 'start' },
@@ -18,7 +18,7 @@ describe('repairGraph', () => {
   });
 
   it('should not modify if all nodes already connected', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'a', label: 'A', type: 'process' },
@@ -31,7 +31,7 @@ describe('repairGraph', () => {
   });
 
   it('should linear-connect nodes with no edges', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'a', label: 'A', type: 'process' },
@@ -45,7 +45,7 @@ describe('repairGraph', () => {
   });
 
   it('should bridge disconnected components', () => {
-    const schema: DiagramSchema = {
+    const schema: NodeGraphSchema = {
       diagramType: 'flowchart',
       nodes: [
         { id: 'a', label: 'A', type: 'process' },

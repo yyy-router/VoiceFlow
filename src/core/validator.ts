@@ -1,6 +1,8 @@
 import {
   DiagramSchema, RawDiagramSchema as RawSchema,
-  Node, RawNode, DiagramPatch,
+  NodeGraphSchema,
+  Node, RawNode,
+  DiagramPatch,
   ValidationResult,
 } from './schema';
 import { repairGraph } from './graph-repair';
@@ -31,13 +33,10 @@ function generateId(raw: RawNode, fallbackIndex: number): string {
 
 // ─── Node Resolution (不依赖 label Map) ───
 function resolveNode(ref: string, nodes: Node[]): Node | null {
-  // 1. Exact ID match
   const byId = nodes.find(n => n.id === ref);
   if (byId) return byId;
-  // 2. Exact label match
   const byLabel = nodes.find(n => n.label === ref);
   if (byLabel) return byLabel;
-  // 3. Fuzzy: ref contains label or label contains ref
   const fuzzy = nodes.find(n =>
     n.label.includes(ref) || ref.includes(n.label)
   );
@@ -50,14 +49,24 @@ export function normalizeNode(raw: RawNode, index: number): Node {
 }
 
 export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
+  if (raw.diagramType === 'sequence') {
+    // Normalize sequence: generate IDs for participants
+    const participants = (raw as any).participants.map((p: any, i: number) => ({
+      id: p.id || p.id_hint || `p${i + 1}`,
+      label: p.label,
+    }));
+    return { diagramType: 'sequence', title: raw.title, participants, messages: (raw as any).messages };
+  }
+
+  // Normalize node-graph types
+  const rawNG = raw as any;
   const nodeIds = new Set<string>();
-  const nodes: Node[] = raw.nodes.map((n) => {
-    // Reuse LLM-provided ID if valid
+  const nodes: Node[] = rawNG.nodes.map((n: any) => {
     if (n.id && !nodeIds.has(n.id)) {
       nodeIds.add(n.id);
       return { id: n.id, label: n.label, type: n.type, color: n.color, attributes: n.attributes };
     }
-    let id = generateId(n, raw.nodes.indexOf(n) + 1);
+    let id = generateId(n, rawNG.nodes.indexOf(n) + 1);
     let dedup = id;
     let counter = 1;
     while (nodeIds.has(dedup)) dedup = `${id}_${++counter}`;
@@ -65,14 +74,13 @@ export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
     return { id: dedup, label: n.label, type: n.type, color: n.color, attributes: n.attributes };
   });
 
-  // Resolve edges: exact ID match first, then label match
-  const edges = raw.edges.map(e => ({
+  const edges = rawNG.edges.map((e: any) => ({
     ...e,
     from: nodeIds.has(e.from) ? e.from : (resolveNode(e.from, nodes)?.id || e.from),
     to: nodeIds.has(e.to) ? e.to : (resolveNode(e.to, nodes)?.id || e.to),
   }));
 
-  return { diagramType: raw.diagramType, title: raw.title, nodes, edges };
+  return { diagramType: rawNG.diagramType, title: raw.title, nodes, edges };
 }
 
 // ─── Parse ───
@@ -88,8 +96,8 @@ export function parsePatch(raw: unknown): { patch: DiagramPatch | null; errors: 
   return { patch: null, errors: result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) };
 }
 
-// ─── Validate Schema ───
-export function validateSchema(schema: DiagramSchema): ValidationResult {
+// ─── Validate Node-Graph ───
+export function validateNodeGraph(schema: NodeGraphSchema): ValidationResult {
   const errors: string[] = [];
   const ids = new Set<string>();
   const dups = new Set<string>();
@@ -106,7 +114,7 @@ export function validateSchema(schema: DiagramSchema): ValidationResult {
     if (e.from === e.to)  errors.push(`自循环边: ${e.from} → ${e.to}`);
   }
 
-  // Deduplicate edges (warning only, not a hard error)
+  // Deduplicate edges
   const seenEdges = new Set<string>();
   const deduped: typeof schema.edges = [];
   for (const e of schema.edges) {
@@ -117,7 +125,7 @@ export function validateSchema(schema: DiagramSchema): ValidationResult {
     }
   }
   if (deduped.length < schema.edges.length) {
-    (schema as any).edges = deduped;
+    schema.edges.splice(0, schema.edges.length, ...deduped);
   }
 
   if (schema.diagramType === 'er' && schema.nodes.length === 0) {
@@ -127,12 +135,41 @@ export function validateSchema(schema: DiagramSchema): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
+// ─── Validate Sequence ───
+function validateSequence(schema: any): ValidationResult {
+  const errors: string[] = [];
+  const pIds = new Set<string>();
+  const pLabels = new Set<string>();
+
+  for (const p of schema.participants) {
+    if (pIds.has(p.id)) errors.push(`重复参与者 ID: ${p.id}`);
+    pIds.add(p.id);
+    if (pLabels.has(p.label)) errors.push(`重复参与者名称: ${p.label}`);
+    pLabels.add(p.label);
+  }
+
+  for (const m of schema.messages) {
+    if (!pIds.has(m.from)) errors.push(`消息引用不存在的发送者: ${m.from}`);
+    if (!pIds.has(m.to)) errors.push(`消息引用不存在的接收者: ${m.to}`);
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+// ─── Validate Schema (dispatches by type) ───
+export function validateSchema(schema: DiagramSchema): ValidationResult {
+  if (schema.diagramType === 'sequence') return validateSequence(schema);
+  return validateNodeGraph(schema);
+}
+
 // ─── Validate Patch ───
 export function validatePatch(schema: DiagramSchema, patch: DiagramPatch, updatedNodes: Node[] = []): ValidationResult {
+  if (schema.diagramType === 'sequence') {
+    return { valid: true, errors: [] }; // patches not supported for sequence
+  }
   const errors: string[] = [];
   const nodeIds = new Set(schema.nodes.map(n => n.id));
   const nodeLabels = new Set(schema.nodes.map(n => n.label));
-  // Also include newly added nodes from this patch
   for (const n of updatedNodes) {
     nodeIds.add(n.id);
     nodeLabels.add(n.label);
@@ -168,8 +205,17 @@ export function processRawSchema(raw: unknown): { schema: DiagramSchema | null; 
   const parsed = parseSchema(raw);
   if (!parsed.schema) return { schema: null, errors: parsed.errors };
   const normalized = normalizeRawSchema(parsed.schema);
-  const repaired = repairGraph(normalized);
-  const validated = validateSchema(repaired);
+
+  // Repair only node-based graphs
+  if ('nodes' in normalized) {
+    const repaired = repairGraph(normalized);
+    const validated = validateNodeGraph(repaired);
+    if (!validated.valid) return { schema: null, errors: validated.errors };
+    return { schema: repaired, errors: [] };
+  }
+
+  // Validate sequence (no repair needed)
+  const validated = validateSequence(normalized);
   if (!validated.valid) return { schema: null, errors: validated.errors };
-  return { schema: repaired, errors: [] };
+  return { schema: normalized, errors: [] };
 }
