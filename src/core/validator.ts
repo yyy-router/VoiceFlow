@@ -50,12 +50,42 @@ export function normalizeNode(raw: RawNode, index: number): Node {
 
 export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
   if (raw.diagramType === 'sequence') {
-    // Normalize sequence: generate IDs for participants
-    const participants = (raw as any).participants.map((p: any, i: number) => ({
+    // Normalize sequence: generate IDs and resolve message references
+    const rawSeq = raw as any;
+    const participants = rawSeq.participants.map((p: any, i: number) => ({
       id: p.id || p.id_hint || `p${i + 1}`,
       label: p.label,
     }));
-    return { diagramType: 'sequence', title: raw.title, participants, messages: (raw as any).messages };
+
+    // Build label → id lookup
+    const labelToId = new Map<string, string>();
+    for (const p of participants) {
+      labelToId.set(p.label, p.id);
+      // Also store id_hint → id for fuzzy matching
+      if ((rawSeq.participants as any[])[participants.indexOf(p)]?.id_hint) {
+        labelToId.set((rawSeq.participants as any[])[participants.indexOf(p)].id_hint, p.id);
+      }
+    }
+
+    // Resolve message from/to from label to ID
+    const messages = rawSeq.messages.map((m: any) => {
+      let fromId = labelToId.get(m.from) || m.from;
+      let toId = labelToId.get(m.to) || m.to;
+      // Fuzzy: try to match by partial label
+      if (!labelToId.has(m.from)) {
+        for (const p of participants) {
+          if (p.label.includes(m.from) || m.from.includes(p.label)) { fromId = p.id; break; }
+        }
+      }
+      if (!labelToId.has(m.to)) {
+        for (const p of participants) {
+          if (p.label.includes(m.to) || m.to.includes(p.label)) { toId = p.id; break; }
+        }
+      }
+      return { ...m, from: fromId, to: toId };
+    });
+
+    return { diagramType: 'sequence', title: raw.title, participants, messages };
   }
 
   // Normalize node-graph types
