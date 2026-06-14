@@ -49,6 +49,18 @@ export function normalizeNode(raw: RawNode, index: number): Node {
 }
 
 export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
+  if (raw.diagramType === 'mindmap') {
+    const rawM = raw as any;
+    let idx = 0;
+    const normNode = (rn: any): any => ({
+      id: rn.id || rn.id_hint || `node${++idx}`,
+      label: rn.label,
+      color: rn.color,
+      children: rn.children?.map(normNode),
+    });
+    return { diagramType: 'mindmap', title: raw.title, root: normNode(rawM.root) } as any;
+  }
+
   if (raw.diagramType === 'sequence') {
     // Normalize sequence: generate IDs and resolve message references
     const rawSeq = raw as any;
@@ -191,13 +203,13 @@ function validateSequence(schema: any): ValidationResult {
 
 // ─── Validate Schema (dispatches by type) ───
 export function validateSchema(schema: DiagramSchema): ValidationResult {
-  if (schema.diagramType === 'sequence') return validateSequence(schema);
+  if (schema.diagramType === 'sequence' || schema.diagramType === 'mindmap') return { valid: true, errors: [] };
   return validateNodeGraph(schema as any);
 }
 
 // ─── Validate Patch ───
 export function validatePatch(schema: DiagramSchema, patch: DiagramPatch, updatedNodes: Node[] = []): ValidationResult {
-  if (schema.diagramType === 'sequence') {
+  if (schema.diagramType === 'sequence' || schema.diagramType === 'mindmap') {
     return { valid: true, errors: [] };
   }
   const errors: string[] = [];
@@ -246,6 +258,9 @@ export function processRawSchema(raw: unknown): { schema: DiagramSchema | null; 
     if (!validated.valid) return { schema: null, errors: validated.errors };
     return { schema: repaired, errors: [] };
   }
+
+  // Mindmap (no repair needed)
+  if (normalized.diagramType === 'mindmap') return { schema: normalized, errors: [] };
 
   // Validate sequence (no repair needed)
   const validated = validateSequence(normalized);

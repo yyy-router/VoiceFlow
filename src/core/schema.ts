@@ -193,10 +193,45 @@ export const RawSequenceSchema = z.object({
 });
 export type RawSequenceSchema = z.infer<typeof RawSequenceSchema>;
 
+// ─── Mind Map ───
+export const MindmapNode: z.ZodType<any> = z.lazy(() =>
+  z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    color: z.string().optional(),
+    children: z.array(MindmapNode).optional(),
+  })
+);
+export type MindmapNode = z.infer<typeof MindmapNode>;
+
+export const MindmapSchema = z.object({
+  diagramType: z.literal('mindmap'),
+  title: z.string().optional(),
+  root: MindmapNode,
+});
+
+// Raw (LLM output, IDs optional)
+export const RawMindmapNode: z.ZodType<any> = z.lazy(() =>
+  z.object({
+    id: z.string().optional(),
+    id_hint: z.string().optional(),
+    label: z.string().min(1),
+    color: z.string().optional(),
+    children: z.array(RawMindmapNode).optional(),
+  })
+);
+
+export const RawMindmapSchema = z.object({
+  diagramType: z.literal('mindmap'),
+  title: z.string().optional(),
+  root: RawMindmapNode,
+});
+
 // ─── Unified Diagram Schema (discriminated union) ───
 export const DiagramSchema = z.discriminatedUnion('diagramType', [
   NodeGraphSchema,
   SequenceSchema,
+  MindmapSchema,
 ]);
 export type DiagramSchema = z.infer<typeof DiagramSchema>;
 
@@ -204,6 +239,7 @@ export type DiagramSchema = z.infer<typeof DiagramSchema>;
 export const RawDiagramSchema = z.discriminatedUnion('diagramType', [
   RawNodeGraphSchema,
   RawSequenceSchema,
+  RawMindmapSchema,
 ]);
 export type RawDiagramSchema = z.infer<typeof RawDiagramSchema>;
 
