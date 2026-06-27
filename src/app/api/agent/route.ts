@@ -17,9 +17,9 @@ let promptHints = '';
 let drawNames = new Set<string>();
 let typeMap: Record<string, string> = {}; // tool name → diagramType
 
-async function ensurePlugins(): Promise<void> {
+function ensurePlugins(): void {
   if (ready) return;
-  await initPlugins();
+  initPlugins();
   pluginTools = getTools();
   promptHints = getPromptHints();
   for (const t of pluginTools) {
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         const summary = context.schema_summary || {};
         const recentActions = context.recent_actions || [];
 
-        await ensurePlugins();
+        ensurePlugins();
 
         const client = new OpenAI({
           apiKey: process.env.DASHSCOPE_API_KEY,

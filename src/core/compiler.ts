@@ -1,4 +1,5 @@
-import { DiagramSchema, NodeGraphSchema, SequenceSchema, MindmapNode, isNodeGraph } from './schema';
+import { DiagramSchema, NodeGraphSchema, SequenceSchema, MindmapNode } from './schema';
+import { compileWithPlugin, ensurePlugins } from './plugins/registry';
 
 export function sanitize(label: string): string {
   return label
@@ -53,17 +54,8 @@ export const SHAPE_MAP: Record<string, [string, string]> = {
 };
 
 export function compileMermaid(schema: DiagramSchema): string {
-  if (isNodeGraph(schema)) {
-    switch (schema.diagramType) {
-      case 'flowchart':   return compileFlowchart(schema);
-      case 'architecture': return compileArchitectureSubgraph(schema);
-      case 'er':          return compileER(schema);
-    }
-  }
-  if (schema.diagramType === 'sequence') return compileSequence(schema);
-  if (schema.diagramType === 'mindmap') return compileMindmap(schema as any);
-  const _exhaustive: never = schema;
-  return '';
+  ensurePlugins();
+  return compileWithPlugin(schema.diagramType, schema);
 }
 
 export function compileFlowchart(schema: NodeGraphSchema): string {
