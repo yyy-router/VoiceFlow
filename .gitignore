@@ -5,3 +5,8 @@ node_modules/
 docs/
 *.tsbuildinfo
 video
+.dockerignore
+docker-compose.yml
+Dockerfile
+nginx.conf
+coverage/

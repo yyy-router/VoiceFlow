@@ -245,11 +245,11 @@ export type RawDiagramSchema = z.infer<typeof RawDiagramSchema>;
 
 // ─── Type guards ───
 export function isNodeGraph(schema: DiagramSchema): schema is NodeGraphSchema {
-  return schema.diagramType !== 'sequence';
+  return schema.diagramType !== 'sequence' && schema.diagramType !== 'mindmap';
 }
 
 export function isNodeGraphRaw(schema: RawDiagramSchema): schema is RawNodeGraphSchema {
-  return schema.diagramType !== 'sequence';
+  return schema.diagramType !== 'sequence' && schema.diagramType !== 'mindmap';
 }
 
 // ─── Patch (deprecated, kept for type compatibility) ───

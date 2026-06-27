@@ -2,9 +2,32 @@ import OpenAI from 'openai';
 import { DiagramPlugin } from './types';
 import { ValidationResult } from '../schema';
 
+// Static imports — safe because all exports in the cycle are hoisted function declarations
+import { flowchartPlugin } from './flowchart.plugin';
+import { erPlugin } from './er.plugin';
+import { architecturePlugin } from './architecture.plugin';
+import { sequencePlugin } from './sequence.plugin';
+import { mindmapPlugin } from './mindmap.plugin';
+
 const plugins = new Map<string, DiagramPlugin>();
 
 let initialized = false;
+
+/** Initialize all built-in plugins. Idempotent — safe on client & server. */
+export function initPlugins(): void {
+  if (initialized) return;
+  initialized = true;
+  registerPlugin(flowchartPlugin);
+  registerPlugin(erPlugin);
+  registerPlugin(architecturePlugin);
+  registerPlugin(sequencePlugin);
+  registerPlugin(mindmapPlugin);
+}
+
+/** Ensure plugins are initialized. Safe to call multiple times. */
+export function ensurePlugins(): void {
+  if (!initialized) initPlugins();
+}
 
 /** Register a diagram plugin. Must be called before using the registry. */
 export function registerPlugin(plugin: DiagramPlugin): void {
@@ -48,23 +71,4 @@ export function validateWithPlugin(type: string, data: unknown): ValidationResul
   const plugin = plugins.get(type);
   if (!plugin) return { valid: false, errors: [`Unknown diagram type: ${type}`] };
   return plugin.validator(data);
-}
-
-/** Initialize all built-in plugins. Call once at app startup. */
-export async function initPlugins(): Promise<void> {
-  if (initialized) return;
-  initialized = true;
-
-  // Dynamic imports to avoid circular deps
-  const { flowchartPlugin } = await import('./flowchart.plugin');
-  const { erPlugin } = await import('./er.plugin');
-  const { architecturePlugin } = await import('./architecture.plugin');
-  const { sequencePlugin } = await import('./sequence.plugin');
-  const { mindmapPlugin } = await import('./mindmap.plugin');
-
-  registerPlugin(flowchartPlugin);
-  registerPlugin(erPlugin);
-  registerPlugin(architecturePlugin);
-  registerPlugin(sequencePlugin);
-  registerPlugin(mindmapPlugin);
 }
