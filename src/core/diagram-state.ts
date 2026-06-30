@@ -65,7 +65,12 @@ export class DiagramState {
       summary.edge_count = s.edges.length;
       summary.labels = s.nodes.map(n => n.label);
       summary.nodes = s.nodes.map(n => ({
-        label: n.label, id: n.id, type: n.type, color: n.color, group: n.group, attributes: n.attributes,
+        label: n.label, id: n.id,
+        type: (n as any).type,
+        color: (n as any).color,
+        group: (n as any).group,
+        attributes: (n as any).attributes,
+        methods: (n as any).methods,
       }));
       summary.edges = s.edges.map(e => ({
         from: e.from, to: e.to, label: e.label,
