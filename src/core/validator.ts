@@ -100,6 +100,35 @@ export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
     return { diagramType: 'sequence', title: raw.title, participants, messages };
   }
 
+  // Normalize class diagram (nodes + edges, but no type/color/group)
+  if (raw.diagramType === 'class') {
+    const rawC = raw as any;
+    const nodeIds = new Set<string>();
+    const hintToId = new Map<string, string>();
+    const nodes: any[] = rawC.nodes.map((n: any, i: number) => {
+      if (n.id && !nodeIds.has(n.id)) {
+        nodeIds.add(n.id);
+        if (n.id_hint) hintToId.set(n.id_hint, n.id);
+        return { id: n.id, label: n.label, attributes: n.attributes, methods: n.methods };
+      }
+      let id = generateId({ label: n.label, id_hint: n.id_hint } as any, i + 1);
+      let dedup = id;
+      let counter = 1;
+      while (nodeIds.has(dedup)) dedup = `${id}_${++counter}`;
+      nodeIds.add(dedup);
+      if (n.id_hint) hintToId.set(n.id_hint, dedup);
+      return { id: dedup, label: n.label, attributes: n.attributes, methods: n.methods };
+    });
+
+    const edges = rawC.edges.map((e: any) => ({
+      ...e,
+      from: nodeIds.has(e.from) ? e.from : (hintToId.get(e.from) || resolveNode(e.from, nodes)?.id || e.from),
+      to: nodeIds.has(e.to) ? e.to : (hintToId.get(e.to) || resolveNode(e.to, nodes)?.id || e.to),
+    }));
+
+    return { diagramType: 'class', title: raw.title, nodes, edges, groupColors: rawC.groupColors };
+  }
+
   // Normalize node-graph types (flowchart / er / architecture)
   const rawNG = raw as any;
   const nodeIds = new Set<string>();
@@ -226,7 +255,7 @@ export function validatePatch(schema: DiagramSchema, patch: DiagramPatch, update
       case 'renameNode': {
         const resolved = resolveNode(
           op.target.id || op.target.label || '',
-          [...schema.nodes, ...updatedNodes]
+          [...schema.nodes as any[], ...updatedNodes]
         );
         if (!resolved) {
           errors.push(`Patch 目标节点无法解析: ${JSON.stringify(op.target)}`);
@@ -251,12 +280,19 @@ export function processRawSchema(raw: unknown): { schema: DiagramSchema | null; 
   if (!parsed.schema) return { schema: null, errors: parsed.errors };
   const normalized = normalizeRawSchema(parsed.schema);
 
-  // Repair only node-based graphs
-  if ('nodes' in normalized) {
-    const repaired = repairGraph(normalized);
+  // Repair only flowchart / er / architecture (class has its own semantics)
+  if ('nodes' in normalized && (normalized as any).diagramType !== 'class') {
+    const repaired = repairGraph(normalized as NodeGraphSchema);
     const validated = validateNodeGraph(repaired);
     if (!validated.valid) return { schema: null, errors: validated.errors };
     return { schema: repaired, errors: [] };
+  }
+
+  // Class diagram — validate via plugin validator, skip repair
+  if (normalized.diagramType === 'class') {
+    const validated = validateNodeGraph(normalized as any);
+    if (!validated.valid) return { schema: null, errors: validated.errors };
+    return { schema: normalized, errors: [] };
   }
 
   // Mindmap (no repair needed)

@@ -8,6 +8,7 @@ import { erPlugin } from './er.plugin';
 import { architecturePlugin } from './architecture.plugin';
 import { sequencePlugin } from './sequence.plugin';
 import { mindmapPlugin } from './mindmap.plugin';
+import { classPlugin } from './class.plugin';
 
 const plugins = new Map<string, DiagramPlugin>();
 
@@ -22,6 +23,7 @@ export function initPlugins(): void {
   registerPlugin(architecturePlugin);
   registerPlugin(sequencePlugin);
   registerPlugin(mindmapPlugin);
+  registerPlugin(classPlugin);
 }
 
 /** Ensure plugins are initialized. Safe to call multiple times. */

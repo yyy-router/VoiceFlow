@@ -227,11 +227,81 @@ export const RawMindmapSchema = z.object({
   root: RawMindmapNode,
 });
 
+// ─── Class Diagram ───
+export const ClassAttribute = z.object({
+  name: z.string().min(1),
+  type: z.string().optional(),
+  visibility: z.enum(['+', '-', '#']).optional(),
+});
+export type ClassAttribute = z.infer<typeof ClassAttribute>;
+
+export const ClassMethod = z.object({
+  name: z.string().min(1),
+  returnType: z.string().optional(),
+  visibility: z.enum(['+', '-', '#']).optional(),
+  parameters: z.array(z.object({
+    name: z.string(),
+    type: z.string().optional(),
+  })).optional(),
+});
+export type ClassMethod = z.infer<typeof ClassMethod>;
+
+export const ClassNode = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  attributes: z.array(ClassAttribute).optional(),
+  methods: z.array(ClassMethod).optional(),
+});
+export type ClassNode = z.infer<typeof ClassNode>;
+
+export const RawClassNode = z.object({
+  id: z.string().optional(),
+  id_hint: z.string().optional(),
+  label: z.string().min(1),
+  attributes: z.array(ClassAttribute).optional(),
+  methods: z.array(ClassMethod).optional(),
+});
+
+export const ClassRelationType = z.enum([
+  'inheritance', 'composition', 'aggregation', 'association', 'dependency',
+]);
+
+export const ClassEdge = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  label: z.string().optional(),
+  relationType: ClassRelationType.optional(),
+});
+export type ClassEdge = z.infer<typeof ClassEdge>;
+
+export const ClassDiagramSchema = z.object({
+  diagramType: z.literal('class'),
+  title: z.string().optional(),
+  nodes: z.array(ClassNode),
+  edges: z.array(ClassEdge),
+  groupColors: z.record(z.string(), z.string()).optional(),
+});
+export type ClassDiagramSchema = z.infer<typeof ClassDiagramSchema>;
+
+export const RawClassDiagramSchema = z.object({
+  diagramType: z.literal('class'),
+  title: z.string().optional(),
+  nodes: z.array(RawClassNode),
+  edges: z.array(z.object({
+    from: z.string(),
+    to: z.string(),
+    label: z.string().optional(),
+    relationType: ClassRelationType.optional(),
+  })),
+  groupColors: z.record(z.string(), z.string()).optional(),
+});
+
 // ─── Unified Diagram Schema (discriminated union) ───
 export const DiagramSchema = z.discriminatedUnion('diagramType', [
   NodeGraphSchema,
   SequenceSchema,
   MindmapSchema,
+  ClassDiagramSchema,
 ]);
 export type DiagramSchema = z.infer<typeof DiagramSchema>;
 
@@ -240,16 +310,21 @@ export const RawDiagramSchema = z.discriminatedUnion('diagramType', [
   RawNodeGraphSchema,
   RawSequenceSchema,
   RawMindmapSchema,
+  RawClassDiagramSchema,
 ]);
 export type RawDiagramSchema = z.infer<typeof RawDiagramSchema>;
 
 // ─── Type guards ───
 export function isNodeGraph(schema: DiagramSchema): schema is NodeGraphSchema {
-  return schema.diagramType !== 'sequence' && schema.diagramType !== 'mindmap';
+  return schema.diagramType !== 'sequence'
+    && schema.diagramType !== 'mindmap'
+    && schema.diagramType !== 'class';
 }
 
 export function isNodeGraphRaw(schema: RawDiagramSchema): schema is RawNodeGraphSchema {
-  return schema.diagramType !== 'sequence' && schema.diagramType !== 'mindmap';
+  return schema.diagramType !== 'sequence'
+    && schema.diagramType !== 'mindmap'
+    && schema.diagramType !== 'class';
 }
 
 // ─── Patch (deprecated, kept for type compatibility) ───

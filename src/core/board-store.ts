@@ -162,6 +162,7 @@ export class BoardStore {
     if (schema.title) return schema.title;
     const typeLabel: Record<string, string> = {
       flowchart: '流程图', er: 'ER图', architecture: '架构图', sequence: '时序图',
+      mindmap: '思维导图', class: '类图',
     };
     if ('nodes' in schema && schema.nodes.length > 0) {
       return `${typeLabel[schema.diagramType] || '图表'} - ${schema.nodes[0].label}`;
