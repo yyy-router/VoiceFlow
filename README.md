@@ -30,11 +30,6 @@ VoiceFlow Agent 通过大语言模型与实时语音识别技术，实现"说一
 
 ---
 
-> 在线体验：**[https://211.159.154.132](https://211.159.154.132/)**  
-> 演示视频：**[腾讯会议回放](https://meeting.tencent.com/cw/29Xp6GEQ02)**
-
----
-
 ## Demo
 
 ### 语音创建流程图
@@ -92,7 +87,7 @@ interface DiagramPlugin {
 }
 ```
 
-目前内置 5 个插件：flowchart / architecture / er / sequence / mindmap。扩展新类型只需新建插件文件并注册。
+目前内置 6 个插件：flowchart / architecture / er / sequence / mindmap / class。扩展新类型只需新建插件文件并注册。
 
 ### 3. Context-Aware Continuous Editing
 
@@ -163,8 +158,8 @@ src/
 │   ├── useDiagramAgent.ts          # SSE 事件消费
 │   └── useDiagramState.ts          # 多画板 BoardStore 状态管理
 ├── core/
-│   ├── schema.ts                   # Zod 联合类型（5 种图 discriminated union）
-│   ├── compiler.ts                 # Schema → Mermaid DSL（6 个编译函数）
+│   ├── schema.ts                   # Zod 联合类型（6 种图 discriminated union）
+│   ├── compiler.ts                 # Schema → Mermaid DSL（7 个编译函数）
 │   ├── validator.ts                # 解析 → 标准化 → ID 生成 → 校验
 │   ├── diagram-state.ts            # 单画板状态机（undo/redo/context）
 │   ├── board-store.ts              # 多画板 + localStorage 持久化
@@ -176,7 +171,8 @@ src/
 │       ├── architecture.plugin.ts  # 架构图（subgraph 分层）
 │       ├── er.plugin.ts            # ER 图
 │       ├── sequence.plugin.ts      # 时序图
-│       └── mindmap.plugin.ts       # 思维导图
+│       ├── mindmap.plugin.ts       # 思维导图
+│       └── class.plugin.ts         # 类图（属性/方法/关系类型）
 └── lib/
     └── asr-pool.ts                 # ASR 连接池（预连接/指数退避）
 ```
@@ -192,6 +188,7 @@ src/
 | **ER 图** | "画一个用户表的 ER 图" | entity 属性字段，多表关联，多轮追加 |
 | **时序图** | "画一个用户登录时序图" | participants/messages，sync/async/return |
 | **思维导图** | "画一个前端技术栈思维导图" | 递归树结构，按深度自动配色 |
+| **类图** | "画一个电商类图，有用户和订单" | 属性和方法定义，继承/组合/聚合/关联/依赖 |
 
 ### 通用能力
 
@@ -233,7 +230,7 @@ npm test             # 50 个单元测试
 | 框架 | Next.js + React |
 | 语言 | TypeScript |
 | AI | DashScope（千问 LLM + 通义 ASR），OpenAI SDK 兼容模式 |
-| 图表 | Mermaid（flowchart / erDiagram / architecture / sequenceDiagram / mindmap） |
+| 图表 | Mermaid（flowchart / erDiagram / architecture / sequenceDiagram / mindmap / classDiagram） |
 | 校验 | Zod |
 | 样式 | Tailwind CSS |
 | 测试 | Vitest |
@@ -246,7 +243,8 @@ npm test             # 50 个单元测试
 - [x] 时序图 / 思维导图
 - [x] 多画板 + 本地持久化
 - [x] Plugin 插件架构 + 流式思考过程
-- [ ] 甘特图 / 类图 / 状态图
+- [x] 类图
+- [ ] 甘特图 / 状态图
 - [ ] SVG / PNG 导出
 - [ ] Draw.io 导出
 - [ ] MCP Integration
@@ -281,7 +279,7 @@ npm test             # 50 个单元测试
 | 模块 | 说明 |
 |------|------|
 | **Schema First 架构** | LLM 输出 Zod 校验的结构化 JSON Schema → 编译器生成 Mermaid DSL，保证输出稳定可预测。 |
-| **Plugin 插件注册中心** | `DiagramPlugin` 接口 + 动态注册 + 自动 Tool/Prompt 生成。新增图表类型仅需新建插件文件并注册，无需修改核心代码。内置 flowchart / architecture / ER / sequence / mindmap 5 个插件。 |
+| **Plugin 插件注册中心** | `DiagramPlugin` 接口 + 动态注册 + 自动 Tool/Prompt 生成。新增图表类型仅需新建插件文件并注册，无需修改核心代码。内置 flowchart / architecture / ER / sequence / mindmap / class 6 个插件。 |
 | **Graph Repair 图修复** | 确定性图连通性修复：孤立节点自动桥接、连通分量合并、空图线性链。 |
 | **多画板 BoardStore** | 多独立画板管理（Draw.io 风格标签页）+ localStorage 持久化，刷新不丢失。 |
 | **DiagramState 状态机** | 单画板快照式 undo/redo 栈、操作日志、焦点节点追踪、LLM 上下文回传。 |
