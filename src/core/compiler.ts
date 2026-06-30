@@ -1,4 +1,7 @@
-import { DiagramSchema, NodeGraphSchema, SequenceSchema, MindmapNode } from './schema';
+import {
+  DiagramSchema, NodeGraphSchema, SequenceSchema,
+  MindmapNode, ClassDiagramSchema,
+} from './schema';
 import { compileWithPlugin, ensurePlugins } from './plugins/registry';
 
 export function sanitize(label: string): string {
@@ -191,5 +194,59 @@ export function compileMindmap(schema: { root: MindmapNode; title?: string }): s
     'mindmap',
   ];
   compileMindmapTree(schema.root, lines, 0);
+  return lines.join('\n');
+}
+
+const RELATION_ARROW: Record<string, string> = {
+  inheritance: '<|--',
+  composition: '*--',
+  aggregation: 'o--',
+  association: '-->',
+  dependency: '..>',
+};
+
+export function compileClassDiagram(schema: ClassDiagramSchema): string {
+  const lines: string[] = ['classDiagram'];
+
+  const seen = new Set<string>();
+  for (const n of schema.nodes) {
+    if (seen.has(n.id)) continue;
+    seen.add(n.id);
+    lines.push(`    class ${sanitize(n.label)} {`);
+    const hasBody = (n.attributes && n.attributes.length > 0)
+      || (n.methods && n.methods.length > 0);
+    if (n.attributes) {
+      for (const a of n.attributes) {
+        const vis = a.visibility || '+';
+        const t = a.type ? ` : ${a.type}` : '';
+        lines.push(`        ${vis} ${sanitize(a.name)}${t}`);
+      }
+    }
+    if (n.methods) {
+      for (const m of n.methods) {
+        const vis = m.visibility || '+';
+        const ret = m.returnType ? ` : ${m.returnType}` : '';
+        const params = m.parameters?.map(p => p.type ? `${p.name} : ${p.type}` : p.name).join(', ') || '';
+        lines.push(`        ${vis} ${sanitize(m.name)}(${sanitize(params)})${ret}`);
+      }
+    }
+    if (!hasBody) {
+      // Empty class body — Mermaid still requires braces
+      lines.push('    }');
+    } else {
+      lines.push('    }');
+    }
+  }
+
+  for (const e of schema.edges) {
+    const fn = schema.nodes.find(n => n.id === e.from);
+    const tn = schema.nodes.find(n => n.id === e.to);
+    const arrow = RELATION_ARROW[e.relationType || 'association'];
+    const fromName = sanitize(fn?.label || e.from);
+    const toName = sanitize(tn?.label || e.to);
+    const lbl = e.label ? ` : ${sanitize(e.label)}` : '';
+    lines.push(`    ${fromName} ${arrow} ${toName}${lbl}`);
+  }
+
   return lines.join('\n');
 }
