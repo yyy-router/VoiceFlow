@@ -8,6 +8,7 @@ import { useDiagramState } from '@/hooks/useDiagramState';
 import VoicePanel from '@/components/VoicePanel';
 import DiagramCanvas from '@/components/DiagramCanvas';
 import ExportButton from '@/components/ExportButton';
+import ThemeToggle from '@/components/ThemeToggle';
 import BottomTabBar from '@/components/BottomTabBar';
 
 export default function Home() {
@@ -81,6 +82,8 @@ export default function Home() {
           >
             <Redo2 className="w-4 h-4" />
           </button>
+          <div className="w-px h-5 bg-border mx-1" />
+          <ThemeToggle />
           <div className="w-px h-5 bg-border mx-1" />
           <ExportButton />
         </div>
