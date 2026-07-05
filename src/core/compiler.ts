@@ -1,6 +1,6 @@
 import {
   DiagramSchema, NodeGraphSchema, SequenceSchema,
-  MindmapNode, ClassDiagramSchema,
+  MindmapNode, ClassDiagramSchema, StateDiagramSchema,
 } from './schema';
 import { compileWithPlugin, ensurePlugins } from './plugins/registry';
 
@@ -246,6 +246,39 @@ export function compileClassDiagram(schema: ClassDiagramSchema): string {
     const toName = sanitize(tn?.label || e.to);
     const lbl = e.label ? ` : ${sanitize(e.label)}` : '';
     lines.push(`    ${fromName} ${arrow} ${toName}${lbl}`);
+  }
+
+  return lines.join('\n');
+}
+
+function compileStateNodes(nodes: any[], lines: string[], depth: number): void {
+  const indent = '    '.repeat(depth);
+  for (const n of nodes) {
+    if (n.stateType === 'choice') {
+      lines.push(`${indent}state ${n.id} <<choice>>`);
+    } else if (n.stateType === 'composite' && n.children?.length) {
+      lines.push(`${indent}state "${sanitize(n.label)}" as ${n.id} {`);
+      compileStateNodes(n.children, lines, depth + 1);
+      lines.push(`${indent}}`);
+    } else {
+      lines.push(`${indent}state "${sanitize(n.label)}" as ${n.id}`);
+      if (n.description) {
+        lines.push(`${indent}${n.id} : ${sanitize(n.description)}`);
+      }
+    }
+  }
+}
+
+export function compileStateDiagram(schema: StateDiagramSchema): string {
+  const lines: string[] = ['stateDiagram-v2'];
+
+  compileStateNodes((schema as any).nodes, lines, 1);
+
+  for (const e of (schema as any).edges) {
+    const fromId = e.from === '[*]' ? '[*]' : e.from;
+    const toId = e.to === '[*]' ? '[*]' : e.to;
+    const lbl = e.label ? ` : ${sanitize(e.label)}` : '';
+    lines.push(`    ${fromId} --> ${toId}${lbl}`);
   }
 
   return lines.join('\n');

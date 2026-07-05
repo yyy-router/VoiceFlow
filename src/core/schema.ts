@@ -296,12 +296,62 @@ export const RawClassDiagramSchema = z.object({
   groupColors: z.record(z.string(), z.string()).optional(),
 });
 
+// ─── State Diagram ───
+export const StateType = z.enum(['simple', 'choice', 'composite']);
+export type StateType = z.infer<typeof StateType>;
+
+export const StateNode: z.ZodType<any> = z.lazy(() =>
+  z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    description: z.string().optional(),
+    stateType: StateType.optional(),
+    children: z.array(StateNode).optional(),
+  })
+);
+export type StateNode = z.infer<typeof StateNode>;
+
+export const RawStateNode: z.ZodType<any> = z.lazy(() =>
+  z.object({
+    id: z.string().optional(),
+    id_hint: z.string().optional(),
+    label: z.string().min(1),
+    description: z.string().optional(),
+    stateType: StateType.optional(),
+    children: z.array(RawStateNode).optional(),
+  })
+);
+
+export const StateDiagramSchema = z.object({
+  diagramType: z.literal('state'),
+  title: z.string().optional(),
+  nodes: z.array(StateNode),
+  edges: z.array(z.object({
+    from: z.string().min(1),
+    to: z.string().min(1),
+    label: z.string().optional(),
+  })),
+});
+export type StateDiagramSchema = z.infer<typeof StateDiagramSchema>;
+
+export const RawStateDiagramSchema = z.object({
+  diagramType: z.literal('state'),
+  title: z.string().optional(),
+  nodes: z.array(RawStateNode),
+  edges: z.array(z.object({
+    from: z.string(),
+    to: z.string(),
+    label: z.string().optional(),
+  })),
+});
+
 // ─── Unified Diagram Schema (discriminated union) ───
 export const DiagramSchema = z.discriminatedUnion('diagramType', [
   NodeGraphSchema,
   SequenceSchema,
   MindmapSchema,
   ClassDiagramSchema,
+  StateDiagramSchema,
 ]);
 export type DiagramSchema = z.infer<typeof DiagramSchema>;
 
@@ -311,20 +361,19 @@ export const RawDiagramSchema = z.discriminatedUnion('diagramType', [
   RawSequenceSchema,
   RawMindmapSchema,
   RawClassDiagramSchema,
+  RawStateDiagramSchema,
 ]);
 export type RawDiagramSchema = z.infer<typeof RawDiagramSchema>;
 
 // ─── Type guards ───
+const NON_NODE_GRAPH = new Set(['sequence', 'mindmap', 'class', 'state']);
+
 export function isNodeGraph(schema: DiagramSchema): schema is NodeGraphSchema {
-  return schema.diagramType !== 'sequence'
-    && schema.diagramType !== 'mindmap'
-    && schema.diagramType !== 'class';
+  return !NON_NODE_GRAPH.has(schema.diagramType);
 }
 
 export function isNodeGraphRaw(schema: RawDiagramSchema): schema is RawNodeGraphSchema {
-  return schema.diagramType !== 'sequence'
-    && schema.diagramType !== 'mindmap'
-    && schema.diagramType !== 'class';
+  return !NON_NODE_GRAPH.has(schema.diagramType);
 }
 
 // ─── Patch (deprecated, kept for type compatibility) ───
