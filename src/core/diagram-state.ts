@@ -71,6 +71,7 @@ export class DiagramState {
         group: (n as any).group,
         attributes: (n as any).attributes,
         methods: (n as any).methods,
+        description: (n as any).description,
       }));
       summary.edges = s.edges.map(e => ({
         from: e.from, to: e.to, label: e.label,
