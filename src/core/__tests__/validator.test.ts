@@ -198,3 +198,33 @@ describe('processRawSchema — full pipeline', () => {
     expect(result.errors.length).toBeGreaterThan(0);
   });
 });
+
+// ─── State Diagram Normalize ───
+describe('normalizeRawSchema — state', () => {
+  it('should generate IDs from id_hint for state nodes', () => {
+    const raw = {
+      diagramType: 'state',
+      nodes: [
+        { id_hint: 'pending', label: '待支付' },
+        { id_hint: 'paid', label: '已支付' },
+      ],
+      edges: [
+        { from: 'pending', to: 'paid', label: '付款成功' },
+        { from: '[*]', to: 'pending' },
+      ],
+    };
+    const result = normalizeRawSchema(raw as any);
+    expect(result.diagramType).toBe('state');
+    const n = (result as any).nodes;
+    expect(n[0].id).toMatch(/^pending_/);
+    expect(n[0].label).toBe('待支付');
+    expect(n[1].id).toMatch(/^paid_/);
+    // Edge refs should be resolved to IDs
+    const e = (result as any).edges;
+    expect(e[0].from).toBe(n[0].id);
+    expect(e[0].to).toBe(n[1].id);
+    // [*] should stay as [*]
+    expect(e[1].from).toBe('[*]');
+    expect(e[1].to).toBe(n[0].id);
+  });
+});

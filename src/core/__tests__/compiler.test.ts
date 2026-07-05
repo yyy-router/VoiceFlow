@@ -107,3 +107,60 @@ describe('compileMermaid — mindmap', () => {
     expect(result).not.toContain('style');
   });
 });
+
+// ─── State Diagram ───
+import { compileStateDiagram } from '../compiler';
+
+describe('compileStateDiagram', () => {
+  it('should generate stateDiagram-v2 with states and transitions', () => {
+    const schema: any = {
+      diagramType: 'state',
+      nodes: [
+        { id: 'idle', label: '空闲' },
+        { id: 'active', label: '运行中', description: '正在处理请求' },
+      ],
+      edges: [
+        { from: '[*]', to: 'idle' },
+        { from: 'idle', to: 'active', label: '启动' },
+        { from: 'active', to: '[*]', label: '完成' },
+      ],
+    };
+    const result = compileStateDiagram(schema);
+    expect(result).toContain('stateDiagram-v2');
+    expect(result).toContain('state "空闲" as idle');
+    expect(result).toContain('state "运行中" as active');
+    expect(result).toContain('active : 正在处理请求');
+    expect(result).toContain('[*] --> idle');
+    expect(result).toContain('idle --> active : 启动');
+    expect(result).toContain('active --> [*] : 完成');
+  });
+
+  it('should output <<choice>> stereotype for choice nodes', () => {
+    const schema: any = {
+      diagramType: 'state',
+      nodes: [
+        { id: 'pending', label: '待支付' },
+        { id: 'fork1', label: '付款判定', stateType: 'choice' },
+        { id: 'paid', label: '已支付' },
+        { id: 'cancelled', label: '已取消' },
+      ],
+      edges: [
+        { from: 'pending', to: 'fork1' },
+        { from: 'fork1', to: 'paid', label: '付款成功' },
+        { from: 'fork1', to: 'cancelled', label: '[支付超时]' },
+      ],
+    };
+    const result = compileStateDiagram(schema);
+    expect(result).toContain('state fork1 <<choice>>');
+  });
+
+  it('should compile through compileMermaid dispatch', () => {
+    const schema = {
+      diagramType: 'state',
+      nodes: [{ id: 's1', label: '待支付' }],
+      edges: [],
+    };
+    const result = compileMermaid(schema as any);
+    expect(result).toContain('stateDiagram-v2');
+  });
+});
