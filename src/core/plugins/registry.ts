@@ -9,6 +9,7 @@ import { architecturePlugin } from './architecture.plugin';
 import { sequencePlugin } from './sequence.plugin';
 import { mindmapPlugin } from './mindmap.plugin';
 import { classPlugin } from './class.plugin';
+import { statePlugin } from './state.plugin';
 
 const plugins = new Map<string, DiagramPlugin>();
 
@@ -24,6 +25,7 @@ export function initPlugins(): void {
   registerPlugin(sequencePlugin);
   registerPlugin(mindmapPlugin);
   registerPlugin(classPlugin);
+  registerPlugin(statePlugin);
 }
 
 /** Ensure plugins are initialized. Safe to call multiple times. */

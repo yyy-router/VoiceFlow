@@ -118,7 +118,8 @@ export async function POST(request: NextRequest) {
               const typeStr = n.type ? `(${n.type})` : '';
               const methodStr = n.methods?.length > 0
                 ? ` [方法: ${n.methods.map((m: any) => m.name).join(', ')}]` : '';
-              return `  - ${n.label}${typeStr}${groupStr}${colorStr}${attrStr}${methodStr}`;
+              const descStr = n.description ? ` — ${n.description}` : '';
+              return `  - ${n.label}${typeStr}${groupStr}${colorStr}${attrStr}${methodStr}${descStr}`;
             }).join('\n')
           : summary.participants?.length > 0
             ? summary.participants.map((p: any) => `  - ${p.label}`).join('\n')

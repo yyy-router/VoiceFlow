@@ -141,3 +141,41 @@ describe('MindmapSchema', () => {
     expect(result.success).toBe(false);
   });
 });
+
+// ─── State Diagram Schema ───
+import { StateDiagramSchema, RawStateDiagramSchema } from '../schema';
+
+describe('StateDiagramSchema', () => {
+  it('should accept valid state diagram', () => {
+    const result = StateDiagramSchema.safeParse({
+      diagramType: 'state',
+      nodes: [
+        { id: 'idle', label: '空闲' },
+        { id: 'active', label: '运行中', description: '处理请求' },
+      ],
+      edges: [
+        { from: '[*]', to: 'idle' },
+        { from: 'idle', to: 'active', label: '启动' },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject missing node label', () => {
+    const result = StateDiagramSchema.safeParse({
+      diagramType: 'state',
+      nodes: [{ id: 's1' }],
+      edges: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should accept raw state diagram with id_hint', () => {
+    const result = RawStateDiagramSchema.safeParse({
+      diagramType: 'state',
+      nodes: [{ id_hint: 'pending', label: '待支付' }],
+      edges: [{ from: 'pending', to: '[*]' }],
+    });
+    expect(result.success).toBe(true);
+  });
+});

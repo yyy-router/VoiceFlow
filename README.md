@@ -87,7 +87,7 @@ interface DiagramPlugin {
 }
 ```
 
-目前内置 6 个插件：flowchart / architecture / er / sequence / mindmap / class。扩展新类型只需新建插件文件并注册。
+目前内置 7 个插件：flowchart / architecture / er / sequence / mindmap / class。扩展新类型只需新建插件文件并注册。
 
 ### 3. Context-Aware Continuous Editing
 
@@ -158,8 +158,8 @@ src/
 │   ├── useDiagramAgent.ts          # SSE 事件消费
 │   └── useDiagramState.ts          # 多画板 BoardStore 状态管理
 ├── core/
-│   ├── schema.ts                   # Zod 联合类型（6 种图 discriminated union）
-│   ├── compiler.ts                 # Schema → Mermaid DSL（7 个编译函数）
+│   ├── schema.ts                   # Zod 联合类型（7 种图 discriminated union）
+│   ├── compiler.ts                 # Schema → Mermaid DSL（8 个编译函数）
 │   ├── validator.ts                # 解析 → 标准化 → ID 生成 → 校验
 │   ├── diagram-state.ts            # 单画板状态机（undo/redo/context）
 │   ├── board-store.ts              # 多画板 + localStorage 持久化
@@ -172,7 +172,8 @@ src/
 │       ├── er.plugin.ts            # ER 图
 │       ├── sequence.plugin.ts      # 时序图
 │       ├── mindmap.plugin.ts       # 思维导图
-│       └── class.plugin.ts         # 类图（属性/方法/关系类型）
+│       ├── class.plugin.ts         # 类图（属性/方法/关系类型）
+│       └── state.plugin.ts         # 状态图（复合状态/菱形判定）
 └── lib/
     └── asr-pool.ts                 # ASR 连接池（预连接/指数退避）
 ```
@@ -189,6 +190,7 @@ src/
 | **时序图** | "画一个用户登录时序图" | participants/messages，sync/async/return |
 | **思维导图** | "画一个前端技术栈思维导图" | 递归树结构，按深度自动配色 |
 | **类图** | "画一个电商类图，有用户和订单" | 属性和方法定义，继承/组合/聚合/关联/依赖 |
+| **状态图** | "画一个订单生命周期状态图" | 复合状态嵌套，菱形判定分支，UML 标准迁移 |
 
 ### 通用能力
 
@@ -230,7 +232,7 @@ npm test             # 50 个单元测试
 | 框架 | Next.js + React |
 | 语言 | TypeScript |
 | AI | DashScope（千问 LLM + 通义 ASR），OpenAI SDK 兼容模式 |
-| 图表 | Mermaid（flowchart / erDiagram / architecture / sequenceDiagram / mindmap / classDiagram） |
+| 图表 | Mermaid（flowchart / erDiagram / architecture / sequenceDiagram / mindmap / classDiagram / stateDiagram） |
 | 校验 | Zod |
 | 样式 | Tailwind CSS |
 | 测试 | Vitest |
@@ -243,8 +245,8 @@ npm test             # 50 个单元测试
 - [x] 时序图 / 思维导图
 - [x] 多画板 + 本地持久化
 - [x] Plugin 插件架构 + 流式思考过程
-- [x] 类图
-- [ ] 甘特图 / 状态图
+- [x] 类图 / 状态图
+- [ ] 甘特图
 - [ ] SVG / PNG 导出
 - [ ] Draw.io 导出
 - [ ] MCP Integration
