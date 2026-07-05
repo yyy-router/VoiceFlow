@@ -100,6 +100,47 @@ export function normalizeRawSchema(raw: RawSchema): DiagramSchema {
     return { diagramType: 'sequence', title: raw.title, participants, messages };
   }
 
+  // Normalize state diagram (nodes + edges, no type/color/group)
+  if (raw.diagramType === 'state') {
+    const rawS = raw as any;
+    const nodeIds = new Set<string>();
+    const hintToId = new Map<string, string>();
+    let idx = 0;
+
+    const normNode = (rn: any): any => {
+      idx++;
+      if (rn.id && !nodeIds.has(rn.id)) {
+        nodeIds.add(rn.id);
+        if (rn.id_hint) hintToId.set(rn.id_hint, rn.id);
+      } else {
+        let id = rn.id_hint
+          ? generateId({ label: rn.label, id_hint: rn.id_hint } as any, idx)
+          : `state_${idx}_${hash(rn.label)}`;
+        let dedup = id;
+        let c = 1;
+        while (nodeIds.has(dedup)) dedup = `${id}_${++c}`;
+        rn.id = dedup;
+        nodeIds.add(dedup);
+        if (rn.id_hint) hintToId.set(rn.id_hint, dedup);
+      }
+      return {
+        id: rn.id,
+        label: rn.label,
+        description: rn.description,
+        stateType: rn.stateType,
+        children: rn.children?.map(normNode),
+      };
+    };
+
+    const nodes = rawS.nodes.map(normNode);
+    const edges = rawS.edges.map((e: any) => ({
+      ...e,
+      from: nodeIds.has(e.from) ? e.from : (hintToId.get(e.from) || e.from),
+      to: nodeIds.has(e.to) ? e.to : (hintToId.get(e.to) || e.to),
+    }));
+    return { diagramType: 'state', title: raw.title, nodes, edges };
+  }
+
   // Normalize class diagram (nodes + edges, but no type/color/group)
   if (raw.diagramType === 'class') {
     const rawC = raw as any;
@@ -176,16 +217,20 @@ export function validateNodeGraph(schema: NodeGraphSchema): ValidationResult {
   const ids = new Set<string>();
   const dups = new Set<string>();
 
-  for (const n of schema.nodes) {
-    if (ids.has(n.id)) dups.add(n.id);
-    ids.add(n.id);
-  }
+  const collectIds = (nodes: any[]) => {
+    for (const n of nodes) {
+      if (ids.has(n.id)) dups.add(n.id);
+      ids.add(n.id);
+      if (n.children) collectIds(n.children);
+    }
+  };
+  collectIds(schema.nodes);
   if (dups.size > 0) errors.push(`重复节点 ID: [${[...dups].join(', ')}]`);
 
   for (const e of schema.edges) {
-    if (!ids.has(e.from)) errors.push(`边引用不存在的起点: ${e.from}`);
-    if (!ids.has(e.to))   errors.push(`边引用不存在的终点: ${e.to}`);
-    if (e.from === e.to)  errors.push(`自循环边: ${e.from} → ${e.to}`);
+    if (e.from !== '[*]' && !ids.has(e.from)) errors.push(`边引用不存在的起点: ${e.from}`);
+    if (e.to   !== '[*]' && !ids.has(e.to))   errors.push(`边引用不存在的终点: ${e.to}`);
+    if (e.from === e.to  && e.from !== '[*]') errors.push(`自循环边: ${e.from} → ${e.to}`);
   }
 
   // Deduplicate edges
@@ -280,7 +325,7 @@ export function processRawSchema(raw: unknown): { schema: DiagramSchema | null; 
   if (!parsed.schema) return { schema: null, errors: parsed.errors };
   const normalized = normalizeRawSchema(parsed.schema);
 
-  // Repair only flowchart / er / architecture (class has its own semantics)
+  // Repair only flowchart / er / architecture / state (class has its own semantics)
   if ('nodes' in normalized && (normalized as any).diagramType !== 'class') {
     const repaired = repairGraph(normalized as NodeGraphSchema);
     const validated = validateNodeGraph(repaired);
