@@ -119,3 +119,122 @@ describe('DiagramState — getContextJson & getSummary', () => {
     expect(summary.edgeCount).toBe(1);
   });
 });
+
+describe('DiagramState — undo/redo edge cases', () => {
+  it('undo returns false when stack empty', () => {
+    const ds = new DiagramState();
+    expect(ds.undo()).toBe(false);
+  });
+
+  it('redo returns false when stack empty', () => {
+    const ds = new DiagramState();
+    expect(ds.redo()).toBe(false);
+  });
+
+  it('undo returns true after two operations', () => {
+    const ds = new DiagramState();
+    ds.setSchema({
+      diagramType: 'flowchart',
+      nodes: [{ label: 'A', type: 'process', id_hint: 'a' }],
+      edges: [],
+    });
+    expect(ds.undo()).toBe(true);
+    // Stack now has the initial empty state
+  });
+});
+
+describe('DiagramState — clear', () => {
+  it('should clear and push to undo', () => {
+    const ds = new DiagramState();
+    ds.setSchema({
+      diagramType: 'flowchart',
+      nodes: [{ label: 'A', type: 'process', id_hint: 'a' }],
+      edges: [],
+    });
+    expect(ds.clear()).toBe(true);
+    expect(ds.canUndo).toBe(true);
+    const s = ds.getSchema() as any;
+    expect(s.nodes).toHaveLength(0);
+    expect(s.edges).toHaveLength(0);
+  });
+
+  it('should return false when already empty', () => {
+    const ds = new DiagramState();
+    expect(ds.clear()).toBe(false);
+  });
+
+  it('should be able to undo clear', () => {
+    const ds = new DiagramState();
+    ds.setSchema({
+      diagramType: 'flowchart',
+      nodes: [{ label: 'A', type: 'process', id_hint: 'a' }],
+      edges: [],
+    });
+    ds.clear();
+    ds.undo();
+    const s = ds.getSchema() as any;
+    expect(s.nodes).toHaveLength(1);
+  });
+});
+
+describe('DiagramState — getContextForLLM', () => {
+  it('should include node and edge details for node-graph', () => {
+    const ds = new DiagramState();
+    ds.setSchema({
+      diagramType: 'flowchart',
+      nodes: [{ label: '开始', type: 'start', id_hint: 's' }],
+      edges: [],
+    });
+    const ctx = ds.getContextForLLM('test input');
+    expect(ctx).toContain('开始');
+    expect(ctx).toContain('flowchart');
+    expect(ctx).toContain('test input');
+  });
+
+  it('should include participants for sequence', () => {
+    const ds = new DiagramState();
+    ds.setSchema({
+      diagramType: 'sequence',
+      participants: [
+        { id_hint: 'client', label: '客户端' },
+        { id_hint: 'server', label: '服务端' },
+      ],
+      messages: [
+        { from: '客户端', to: '服务端', text: '请求数据' },
+      ],
+    });
+    const ctx = ds.getContextForLLM('sequence test');
+    expect(ctx).toContain('客户端');
+    expect(ctx).toContain('服务端');
+    expect(ctx).toContain('sequence test');
+  });
+
+  it('should include root for mindmap', () => {
+    const ds = new DiagramState();
+    ds.setSchema({
+      diagramType: 'mindmap',
+      root: { id_hint: 'tech', label: '技术栈', children: [{ id_hint: 'fe', label: '前端' }] },
+    });
+    const ctx = ds.getContextForLLM('mindmap test');
+    expect(ctx).toContain('技术栈');
+    expect(ctx).toContain('前端');
+    expect(ctx).toContain('mindmap test');
+  });
+});
+
+describe('DiagramState — lastOperation', () => {
+  it('should track last operation text', () => {
+    const ds = new DiagramState();
+    expect(ds.getLastOperationText()).toBe('无');
+    ds.setSchema({
+      diagramType: 'flowchart',
+      nodes: [{ label: 'X', type: 'process', id_hint: 'x' }],
+      edges: [],
+    });
+    expect(ds.getLastOperationText()).toBe('创建/更新了图');
+    ds.undo();
+    expect(ds.getLastOperationText()).toBe('撤销了上一步');
+    ds.redo();
+    expect(ds.getLastOperationText()).toBe('恢复了上一步');
+  });
+});
