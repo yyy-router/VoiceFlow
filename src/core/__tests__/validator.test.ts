@@ -228,3 +228,73 @@ describe('normalizeRawSchema — state', () => {
     expect(e[1].to).toBe(n[0].id);
   });
 });
+
+// ─── Edge Cases ───
+describe('processRawSchema — edge cases', () => {
+  it('should reject ER with no nodes', () => {
+    const result = processRawSchema({
+      diagramType: 'er',
+      nodes: [],
+      edges: [],
+    });
+    expect(result.schema).toBeNull();
+  });
+
+  it('should auto-dedup duplicate IDs by appending counter', () => {
+    const result = processRawSchema({
+      diagramType: 'flowchart',
+      nodes: [
+        { id: 'dup', label: 'A', type: 'process' },
+        { id: 'dup', label: 'B', type: 'process' },
+      ],
+      edges: [],
+    });
+    expect(result.schema).not.toBeNull();
+    // Second node should have a de-duplicated ID
+    const ids = (result.schema as any).nodes.map((n: any) => n.id);
+    expect(ids[0]).toBe('dup');
+    // Second node with same id gets a fresh generated ID
+    expect(ids[1]).not.toBe('dup');
+    expect(new Set(ids).size).toBe(2); // unique
+  });
+
+  it('should reject self-loop edge', () => {
+    const result = processRawSchema({
+      diagramType: 'flowchart',
+      nodes: [
+        { label: 'A', type: 'process', id_hint: 'a' },
+      ],
+      edges: [{ from: 'A', to: 'A' }],
+    });
+    expect(result.schema).toBeNull();
+  });
+
+  it('should accept sequence with valid participants', () => {
+    const result = processRawSchema({
+      diagramType: 'sequence',
+      participants: [
+        { id_hint: 'a', label: '用户' },
+      ],
+      messages: [],
+    });
+    expect(result.schema).not.toBeNull();
+    const s = result.schema as any;
+    expect(s.participants).toHaveLength(1);
+  });
+
+  it('should deduplicate edges', () => {
+    const result = processRawSchema({
+      diagramType: 'flowchart',
+      nodes: [
+        { label: 'A', type: 'process', id_hint: 'a' },
+        { label: 'B', type: 'process', id_hint: 'b' },
+      ],
+      edges: [
+        { from: 'A', to: 'B' },
+        { from: 'A', to: 'B' },
+      ],
+    });
+    expect(result.schema).not.toBeNull();
+    expect((result.schema as any).edges).toHaveLength(1);
+  });
+});

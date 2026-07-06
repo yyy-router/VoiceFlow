@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { compileMermaid, compileMindmap } from '../compiler';
+import {
+  compileMermaid, compileMindmap, compileER,
+  compileSequence, compileArchitectureSubgraph, compileStateDiagram,
+} from '../compiler';
 import { NodeGraphSchema } from '../schema';
 
 describe('compileMermaid — flowchart', () => {
@@ -109,7 +112,6 @@ describe('compileMermaid — mindmap', () => {
 });
 
 // ─── State Diagram ───
-import { compileStateDiagram } from '../compiler';
 
 describe('compileStateDiagram', () => {
   it('should generate stateDiagram-v2 with states and transitions', () => {
@@ -162,5 +164,89 @@ describe('compileStateDiagram', () => {
     };
     const result = compileMermaid(schema as any);
     expect(result).toContain('stateDiagram-v2');
+  });
+});
+
+// ─── ER Diagram ───
+describe('compileER', () => {
+  it('should generate erDiagram with entities', () => {
+    const schema: any = {
+      diagramType: 'er',
+      nodes: [
+        { id: 'user', label: '用户', attributes: [{ name: '用户名', type: 'string' }] },
+      ],
+      edges: [],
+    };
+    const result = compileER(schema);
+    expect(result).toContain('erDiagram');
+    expect(result).toContain('用户');
+    expect(result).toContain('string 用户名');
+  });
+
+  it('should include relationships', () => {
+    const schema: any = {
+      diagramType: 'er',
+      nodes: [
+        { id: 'user', label: '用户' },
+        { id: 'order', label: '订单' },
+      ],
+      edges: [{ from: 'user', to: 'order', label: '下单' }],
+    };
+    const result = compileER(schema);
+    expect(result).toContain('用户 ||--o{ 订单 : "下单"');
+  });
+});
+
+// ─── Sequence Diagram ───
+describe('compileSequence', () => {
+  it('should generate sequenceDiagram with participants', () => {
+    const schema: any = {
+      diagramType: 'sequence',
+      participants: [
+        { id: 'p1', label: '客户端' },
+        { id: 'p2', label: '服务端' },
+      ],
+      messages: [
+        { from: 'p1', to: 'p2', text: '请求数据', messageType: 'sync' },
+      ],
+    };
+    const result = compileSequence(schema);
+    expect(result).toContain('sequenceDiagram');
+    expect(result).toContain('participant 客户端');
+    expect(result).toContain('客户端->>服务端: 请求数据');
+  });
+
+  it('should render async and return arrows', () => {
+    const schema: any = {
+      diagramType: 'sequence',
+      participants: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+      messages: [
+        { from: 'a', to: 'b', text: 'async msg', messageType: 'async' },
+        { from: 'b', to: 'a', text: 'reply', messageType: 'return' },
+      ],
+    };
+    const result = compileSequence(schema);
+    expect(result).toContain('A-->>B: async msg');
+    expect(result).toContain('B-->>A: reply');
+  });
+});
+
+// ─── Architecture Subgraph ───
+describe('compileArchitectureSubgraph', () => {
+  it('should generate flowchart LR with subgraph', () => {
+    const schema: any = {
+      diagramType: 'architecture',
+      nodes: [
+        { id: 'fe', label: '前端', type: 'service', group: '前端层' },
+        { id: 'api', label: 'API', type: 'service', group: '网关层' },
+        { id: 'db', label: 'MySQL', type: 'database', group: '数据层' },
+      ],
+      edges: [{ from: 'fe', to: 'api' }, { from: 'api', to: 'db' }],
+    };
+    const result = compileArchitectureSubgraph(schema);
+    expect(result).toContain('flowchart LR');
+    expect(result).toContain('subgraph');
+    expect(result).toContain('前端层');
+    expect(result).toContain('fe --> api');
   });
 });
