@@ -1,9 +1,10 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
-import type { AddressInfo } from 'node:net';
+import { createConnection, type AddressInfo } from 'node:net';
 import WebSocket, { WebSocketServer } from 'ws';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachSpeechRelay } from '../../../scripts/speech-relay.mjs';
+import { createSpeechAdmission, withSpeechAdmission } from '../../../scripts/speech-admission.mjs';
 import { SpeechStreamClient } from '../speech-stream-client';
 
 type ASREvent = { type: string; audio?: string; session?: object; event_id?: string };
@@ -32,7 +33,12 @@ function nextMessage(socket: WebSocket, type: string): Promise<{ type: string; t
   });
 }
 
-async function fixture(options: { autoFinish?: boolean; autoReady?: boolean; setupTimeoutMs?: number; finishTimeoutMs?: number } = {}) {
+async function fixture(options: {
+  autoFinish?: boolean; autoReady?: boolean; setupTimeoutMs?: number; finishTimeoutMs?: number;
+  admission?: Parameters<typeof createSpeechAdmission>[0];
+  handleHttp?: (request: IncomingMessage, response: ServerResponse) => void | Promise<void>;
+  upstreamFailure?: boolean;
+} = {}) {
   const upstreamServer = createServer();
   const upstream = new WebSocketServer({ server: upstreamServer });
   const upstreamHost = await listen(upstreamServer);
@@ -54,9 +60,16 @@ async function fixture(options: { autoFinish?: boolean; autoReady?: boolean; set
       }
     });
   });
-  const server = createServer((_request, response) => response.end('ok'));
+  const admission = createSpeechAdmission({ allowAnonymous: true, ...options.admission });
+  const server = createServer(withSpeechAdmission(options.handleHttp || ((_request: IncomingMessage, response: ServerResponse) => {
+    response.end('ok');
+  }), admission));
   const relay = attachSpeechRelay(server, {
-    createUpstream: () => new WebSocket(`ws://${upstreamHost}`),
+    admission,
+    createUpstream: () => {
+      if (options.upstreamFailure) throw new Error('Provider unavailable');
+      return new WebSocket(`ws://${upstreamHost}`);
+    },
     setupTimeoutMs: options.setupTimeoutMs ?? 1000,
     finishTimeoutMs: options.finishTimeoutMs ?? 1000,
   });
@@ -74,9 +87,13 @@ async function fixture(options: { autoFinish?: boolean; autoReady?: boolean; set
   });
   return {
     sessions, host, url: `ws://${host}/api/speech/stream`,
-    async open() {
-      const client = new WebSocket(`ws://${host}/api/speech/stream`, { origin: `http://${host}` });
+    connect(clientOptions: WebSocket.ClientOptions = { origin: `http://${host}` }) {
+      const client = new WebSocket(`ws://${host}/api/speech/stream`, clientOptions);
       clients.push(client);
+      return client;
+    },
+    async open() {
+      const client = this.connect();
       await nextMessage(client, 'ready');
       return client;
     },
@@ -91,7 +108,10 @@ afterEach(async () => {
 describe('browser to ASR realtime relay', () => {
   it('delivers audio to ASR before recording ends and preserves the final chunk before commit', async () => {
     const f = await fixture();
-    vi.stubGlobal('WebSocket', WebSocket);
+    class BrowserSocket extends WebSocket {
+      constructor(url: string) { super(url, { origin: `http://${f.host}` }); }
+    }
+    vi.stubGlobal('WebSocket', BrowserSocket);
     const onError = vi.fn();
     const client = new SpeechStreamClient(f.url, onError);
     const first = new Uint8Array([1, 2, 3, 4]);
@@ -186,7 +206,7 @@ describe('browser to ASR realtime relay', () => {
 
   it('times out if the provider never configures the session', async () => {
     const f = await fixture({ autoReady: false, setupTimeoutMs: 150 });
-    const client = new WebSocket(f.url);
+    const client = f.connect();
     const error = nextMessage(client, 'error');
     await expect(error).resolves.toMatchObject({ message: expect.stringContaining('连接超时') });
   });
@@ -206,5 +226,99 @@ describe('browser to ASR realtime relay', () => {
     const [error] = await once(client, 'error');
     expect(error.message).toContain('403');
     expect(f.sessions).toHaveLength(0);
+  });
+
+  it('rejects missing Origin and authentication before allocating upstream resources', async () => {
+    const f = await fixture();
+    const client = f.connect({});
+    const [error] = await once(client, 'error');
+    expect(error.message).toContain('403');
+    expect(f.sessions).toHaveLength(0);
+    const protectedFixture = await fixture({ admission: { authUser: 'user', authPassword: 'secret' } });
+    const unauthorized = protectedFixture.connect();
+    const [authError] = await once(unauthorized, 'error');
+    expect(authError.message).toContain('401');
+    expect(protectedFixture.sessions).toHaveLength(0);
+    const authenticated = protectedFixture.connect({ origin: `http://${protectedFixture.host}`,
+      headers: { Authorization: `Basic ${Buffer.from('user:secret').toString('base64')}` } });
+    await nextMessage(authenticated, 'ready');
+    expect(protectedFixture.sessions).toHaveLength(1);
+  });
+
+  it('returns capacity after cancellation without dropping the per-IP rate budget', async () => {
+    const f = await fixture({ admission: { maxSessionsPerIP: 1, maxStartsPerIP: 2 } });
+    const first = await f.open();
+    const blocked = f.connect();
+    const [error] = await once(blocked, 'error');
+    expect(error.message).toContain('429');
+    expect(f.sessions).toHaveLength(1);
+    const closed = once(f.sessions[0].socket, 'close');
+    first.send(JSON.stringify({ type: 'cancel' }));
+    await closed;
+    const second = await f.open();
+    const secondClosed = once(f.sessions[1].socket, 'close');
+    second.send(JSON.stringify({ type: 'cancel' }));
+    await secondClosed;
+    const throttled = f.connect();
+    const [rateError] = await once(throttled, 'error');
+    expect(rateError.message).toContain('429');
+    expect(f.sessions).toHaveLength(2);
+  });
+
+  it('releases a reservation if constructing the provider socket fails', async () => {
+    const f = await fixture({ upstreamFailure: true, admission: { maxSessionsPerIP: 1 } });
+    for (let index = 0; index < 2; index++) {
+      const client = f.connect();
+      await expect(nextMessage(client, 'error')).resolves.toMatchObject({ message: 'Provider unavailable' });
+    }
+  });
+
+  it('returns the reserved slot after a malformed WebSocket handshake', async () => {
+    const f = await fixture({ admission: { maxSessionsPerIP: 1 } });
+    const [host, port] = f.host.split(':');
+    const socket = createConnection({ host, port: Number(port) });
+    let response = '';
+    socket.on('data', data => { response += data.toString(); });
+    await once(socket, 'connect');
+    socket.write(`GET /api/speech/stream HTTP/1.1\r\nHost: ${f.host}\r\nOrigin: http://${f.host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: invalid\r\n\r\n`);
+    await once(socket, 'close');
+    expect(response).toContain('400 Bad Request');
+    expect(f.sessions).toHaveLength(0);
+    await f.open();
+    expect(f.sessions).toHaveLength(1);
+  });
+
+  it('shares the global budget with legacy POST requests', async () => {
+    let finishHttp!: () => void;
+    let acceptedHttp!: () => void;
+    const accepted = new Promise<void>(resolve => { acceptedHttp = resolve; });
+    const f = await fixture({ admission: { maxSessions: 1 }, handleHttp: async (_request, response) => {
+      acceptedHttp();
+      await new Promise<void>(resolve => { finishHttp = resolve; });
+      response.end('done');
+    } });
+    const response = fetch(`http://${f.host}/api/speech`, { method: 'POST', headers: { Origin: `http://${f.host}` } });
+    await accepted;
+    const client = f.connect();
+    const [error] = await once(client, 'error');
+    expect(error.message).toContain('429');
+    expect(f.sessions).toHaveLength(0);
+    finishHttp();
+    expect((await response).status).toBe(200);
+    await f.open();
+    expect(f.sessions).toHaveLength(1);
+    const blocked = await fetch(`http://${f.host}/api/speech`, { method: 'POST', headers: { Origin: `http://${f.host}` } });
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('retry-after')).toBeTruthy();
+  });
+
+  it('preserves the Host port requirement across reverse proxies', async () => {
+    const f = await fixture();
+    const bad = f.connect({ origin: 'https://public.example:8443', headers: { Host: 'public.example' } });
+    const [error] = await once(bad, 'error');
+    expect(error.message).toContain('403');
+    const good = f.connect({ origin: 'https://public.example:8443', headers: { Host: 'public.example:8443' } });
+    await nextMessage(good, 'ready');
+    expect(f.sessions).toHaveLength(1);
   });
 });

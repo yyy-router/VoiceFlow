@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
+import { createSpeechAdmission } from './speech-admission.mjs';
 
 export const SPEECH_PATH = '/api/speech/stream';
 
@@ -15,6 +16,7 @@ function connectToASR() {
 
 /** One upstream connection per recording; no credentials or audio history reach other clients. */
 export function attachSpeechRelay(server, {
+  admission = createSpeechAdmission(),
   createUpstream = connectToASR,
   setupTimeoutMs = 10000,
   finishTimeoutMs = 20000,
@@ -24,25 +26,28 @@ export function attachSpeechRelay(server, {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 });
   const onUpgrade = (request, socket, head) => {
     if (request.url?.split('?')[0] !== SPEECH_PATH) return;
-    // Browsers always provide Origin. Allow non-browser diagnostic clients without it.
-    try {
-      if (request.headers.origin) {
-        const origin = new URL(request.headers.origin);
-        if (!['http:', 'https:'].includes(origin.protocol)
-          || origin.host !== new URL(`${origin.protocol}//${request.headers.host}`).host) {
-          socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
-          return;
-        }
-      }
-    } catch {
-      socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+    const reservation = admission.acquire(request);
+    if (!reservation.allowed) {
+      const status = { 401: 'Unauthorized', 403: 'Forbidden', 429: 'Too Many Requests', 503: 'Service Unavailable' }[reservation.status];
+      const headers = Object.entries(reservation.headers).map(([key, value]) => `${key}: ${value}\r\n`).join('');
+      socket.end(`HTTP/1.1 ${reservation.status} ${status}\r\nConnection: close\r\n${headers}\r\n`);
       return;
     }
-    wss.handleUpgrade(request, socket, head, client => wss.emit('connection', client));
+    // Invalid WebSocket handshakes never emit connection, but must still return their reservation.
+    socket.once('close', reservation.release);
+    try {
+      wss.handleUpgrade(request, socket, head, client => {
+        socket.off('close', reservation.release);
+        wss.emit('connection', client, reservation.release);
+      });
+    } catch {
+      reservation.release();
+      socket.destroy();
+    }
   };
   server.on('upgrade', onUpgrade);
 
-  wss.on('connection', client => {
+  wss.on('connection', (client, release) => {
     let upstream;
     let phase = 'connecting';
     let configured = false;
@@ -60,12 +65,18 @@ export function attachSpeechRelay(server, {
     }
 
     function cleanup() {
+      if (phase === 'closed') return;
       phase = 'closed';
       clearTimeout(setupTimer);
       clearTimeout(durationTimer);
       clearTimeout(idleTimer);
       clearTimeout(finishTimer);
-      closeUpstream();
+      // Keep the slot until the provider socket has actually closed, not just the browser.
+      if (!upstream || upstream.readyState === WebSocket.CLOSED) release();
+      else {
+        upstream.once('close', release);
+        closeUpstream();
+      }
     }
 
     function sendClient(event) {

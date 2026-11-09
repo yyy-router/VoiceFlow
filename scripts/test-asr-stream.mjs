@@ -4,7 +4,13 @@
 import WebSocket from 'ws';
 
 const url = process.env.SPEECH_URL || 'ws://localhost:3000/api/speech/stream';
-const ws = new WebSocket(url);
+const origin = new URL(url);
+origin.protocol = origin.protocol === 'wss:' ? 'https:' : 'http:';
+const headers = {};
+if (process.env.SPEECH_AUTH_USER && process.env.SPEECH_AUTH_PASSWORD) {
+  headers.Authorization = `Basic ${Buffer.from(`${process.env.SPEECH_AUTH_USER}:${process.env.SPEECH_AUTH_PASSWORD}`).toString('base64')}`;
+}
+const ws = new WebSocket(url, { origin: origin.origin, headers });
 const chunk = Buffer.alloc(1600 * 2); // 100 ms, PCM16 mono at 16 kHz
 let interval;
 let chunks = 0;

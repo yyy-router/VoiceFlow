@@ -26,7 +26,13 @@ console.log('POST /api/speech ...');
 
 const res = await fetch('http://localhost:3000/api/speech', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    Origin: 'http://localhost:3000',
+    ...(process.env.SPEECH_AUTH_USER && process.env.SPEECH_AUTH_PASSWORD ? {
+      Authorization: `Basic ${Buffer.from(`${process.env.SPEECH_AUTH_USER}:${process.env.SPEECH_AUTH_PASSWORD}`).toString('base64')}`,
+    } : {}),
+  },
   body: JSON.stringify({ audio: base64 }),
 });
 

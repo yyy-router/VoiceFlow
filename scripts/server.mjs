@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import next from 'next';
 import { attachSpeechRelay } from './speech-relay.mjs';
+import { createSpeechAdmission, withSpeechAdmission } from './speech-admission.mjs';
 
 const dev = process.argv.includes('--dev');
 process.env.NODE_ENV ||= dev ? 'development' : 'production';
@@ -9,8 +10,10 @@ const hostname = process.env.HOSTNAME || '0.0.0.0';
 const app = next({ dev, hostname, port });
 await app.prepare();
 const handle = app.getRequestHandler();
+const admission = createSpeechAdmission();
+const guardedHandle = withSpeechAdmission(handle, admission);
 const server = createServer((request, response) => {
-  handle(request, response).catch(error => {
+  guardedHandle(request, response).catch(error => {
     console.error('Request failed:', error);
     if (!response.headersSent) response.writeHead(500);
     response.end();
@@ -19,7 +22,7 @@ const server = createServer((request, response) => {
 
 // Next installs its HMR upgrade listener on the first HTTP request; the relay
 // handles only its own path, leaving development hot reload to Next.
-const relay = attachSpeechRelay(server);
+const relay = attachSpeechRelay(server, { admission });
 server.listen(port, hostname, () => {
   console.log(`VoiceFlow ready at http://localhost:${port} (${dev ? 'development' : 'production'})`);
 });
