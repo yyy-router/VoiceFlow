@@ -5,6 +5,8 @@ import { Mic, MicOff, Loader2 } from 'lucide-react';
 
 interface Props {
   isListening: boolean;
+  isPreparing: boolean;
+  isTranscribing: boolean;
   isSupported: boolean;
   speechError: string | null;
   isLoading: boolean;
@@ -19,6 +21,8 @@ interface Props {
 
 export default function VoicePanel({
   isListening,
+  isPreparing,
+  isTranscribing,
   isSupported,
   speechError,
   isLoading,
@@ -31,7 +35,7 @@ export default function VoicePanel({
   stateInfo,
 }: Props) {
   const [log, setLog] = useState<string[]>([]);
-  const isHolding = useRef(false);
+  const activePointerId = useRef<number | null>(null);
   const reasoningEndRef = useRef<HTMLDivElement>(null);
 
   const addLog = useCallback((msg: string) => setLog((p) => [msg, ...p].slice(0, 50)), []);
@@ -43,15 +47,17 @@ export default function VoicePanel({
     }
   }, [reasoningText]);
 
-  const onDown = useCallback(() => {
-    isHolding.current = true;
+  const onDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || activePointerId.current !== null || isLoading || isTranscribing) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    activePointerId.current = event.pointerId;
     startListening();
     addLog('开始录音...');
-  }, [startListening, addLog]);
+  }, [startListening, addLog, isLoading, isTranscribing]);
 
-  const onUp = useCallback(async () => {
-    if (!isHolding.current) return;
-    isHolding.current = false;
+  const onUp = useCallback(async (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (activePointerId.current !== event.pointerId) return;
+    activePointerId.current = null;
     const text = await stopListening();
     if (text) {
       addLog(text);
@@ -76,8 +82,10 @@ export default function VoicePanel({
       <button
         onPointerDown={onDown}
         onPointerUp={onUp}
-        onPointerLeave={onUp}
-        disabled={isLoading}
+        onPointerCancel={onUp}
+        onLostPointerCapture={onUp}
+        disabled={isLoading || isTranscribing}
+        style={{ touchAction: 'none' }}
         className={`w-full py-5 rounded-2xl text-base font-medium transition-all select-none flex items-center justify-center gap-2.5 ${
           isListening
             ? 'bg-danger text-white mic-active-ring shadow-lg shadow-danger/25'
@@ -88,6 +96,16 @@ export default function VoicePanel({
           <>
             <Mic className="w-5 h-5" />
             松开结束
+          </>
+        ) : isPreparing ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            正在准备录音...
+          </>
+        ) : isTranscribing ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            正在识别语音...
           </>
         ) : isLoading ? (
           <>

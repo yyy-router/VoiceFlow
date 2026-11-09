@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/server.mjs --dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/server.mjs",
     "lint": "eslint",
     "test": "npx vitest run"
   },
@@ -16,7 +16,8 @@
     "openai": "^6.42.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
