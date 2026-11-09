@@ -40,9 +40,14 @@ VoiceFlow Agent 是一个纯语音驱动的 AI 工程绘图工具。用户只需
 
 #### ASR 模块
 
-- **位置**：`src/hooks/useSpeech.ts` + `src/app/api/speech/route.ts` + `src/lib/asr-pool.ts`
-- **功能**：浏览器采集 PCM 16kHz 音频 → WebSocket 中继 → 通义 ASR 实时识别 → 文本回传
-- **关键设计**：ASR 连接池（预连接降低时延 + 指数退避重连），WebSocket 双向中继
+- **位置**：`src/hooks/useSpeech.ts`、`src/lib/speech-recorder.ts`、`src/lib/speech-stream-client.ts`、`public/audio/pcm-worklet.js`、`scripts/speech-relay.mjs`
+- **功能**：AudioWorklet 采集音频，每 100ms 生成一块 16kHz、单声道、PCM16 小端音频，通过同源 WebSocket `/api/speech/stream` 实时上传；后端立即将收到的音频编码为 Base64，追加到通义 ASR WebSocket。
+- **结束流程**：松开按钮 → 停止采集 → 刷出最后不足 100ms 的音频 → `finish` → ASR `input_audio_buffer.commit` → `session.finish` → 等待 `session.finished` → 返回最终文字 → 调用绘图 Agent。
+- **交互边界**：保留按住说话、松开生成。使用 Manual 模式控制整句边界；实时上传不代表在松开前就生成图表或提供逐字转写。
+- **资源管理**：每次录音使用独立 ASR 连接；断连、取消、超时、麦克风拒绝授权以及页面卸载时释放连接和录音资源。客户端连接建立期间最多缓存 5 秒音频；服务端限制单次录音 120 秒，并处理初始化、空闲和最终结果超时。
+- **运行方式**：`npm run dev` / `npm start` 启动自定义 Node.js 入口 `scripts/server.mjs`，与 Next.js 共用端口。API Key 只由服务端读取；生产环境需要 HTTPS/WSS 和反向代理 WebSocket Upgrade 支持，不适用于仅有无状态 HTTP Function 的部署方式。
+- **兼容接口**：旧 `POST /api/speech` 与 `src/lib/asr-pool.ts` 保留用于兼容，页面实时录音不再调用它们。
+- **验证**：测试覆盖松开前上游收音、音频顺序、末块 flush、重采样、快速松开、权限拒绝、断连、并发隔离和超时。运行应用后可用 `node scripts/test-asr-stream.mjs` 发送合成静音检查真实 ASR 协议链路；语音准确率和实际麦克风体验需在浏览器验证。
 
 #### Agent 模块
 
