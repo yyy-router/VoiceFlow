@@ -5,6 +5,7 @@ import { Mic, MicOff, Loader2 } from 'lucide-react';
 
 interface Props {
   isListening: boolean;
+  isPreparing: boolean;
   isTranscribing: boolean;
   isSupported: boolean;
   speechError: string | null;
@@ -20,6 +21,7 @@ interface Props {
 
 export default function VoicePanel({
   isListening,
+  isPreparing,
   isTranscribing,
   isSupported,
   speechError,
@@ -97,6 +99,11 @@ export default function VoicePanel({
           <>
             <Mic className="w-5 h-5" />
             松开结束
+          </>
+        ) : isPreparing ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            正在准备录音...
           </>
         ) : isTranscribing ? (
           <>

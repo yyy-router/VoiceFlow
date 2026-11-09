@@ -44,6 +44,7 @@ export function useSpeech() {
 
   return {
     isListening: status === 'recording',
+    isPreparing: status === 'preparing',
     isTranscribing: status === 'transcribing',
     startListening, stopListening, isSupported,
     error: isSupported ? error : '当前浏览器不支持实时录音，请使用 HTTPS 或 localhost 下的现代浏览器',

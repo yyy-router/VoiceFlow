@@ -74,7 +74,7 @@ describe('microphone recording lifecycle', () => {
     expect(track.stop).toHaveBeenCalled();
     expect(MockContext.instances[0].close).toHaveBeenCalledOnce();
     expect(processor.port.close).toHaveBeenCalledOnce();
-    expect(status.mock.calls.map(call => call[0])).toEqual(['recording', 'transcribing', 'idle']);
+    expect(status.mock.calls.map(call => call[0])).toEqual(['preparing', 'recording', 'transcribing', 'idle']);
     expect(error).not.toHaveBeenCalled();
   });
 
@@ -82,38 +82,66 @@ describe('microphone recording lifecycle', () => {
     let grant!: (value: object) => void;
     getUserMedia.mockReturnValue(new Promise(resolve => { grant = resolve; }));
     const error = vi.fn();
-    const recorder = new SpeechRecorder('ws://localhost', vi.fn(), error);
+    const status = vi.fn();
+    const recorder = new SpeechRecorder('ws://localhost', status, error);
     recorder.start();
+    expect(status.mock.calls.map(call => call[0])).toEqual(['preparing']);
     await expect(recorder.stop()).resolves.toBe('');
     grant({ getTracks: () => [track] });
     await vi.waitFor(() => expect(track.stop).toHaveBeenCalledOnce());
     expect(MockWorklet.instances).toHaveLength(0);
     expect(transport.cancel).toHaveBeenCalledOnce();
     expect(error).not.toHaveBeenCalled();
+    expect(status.mock.calls.map(call => call[0])).toEqual(['preparing', 'idle']);
   });
 
   it('releases the stream when cancelled during worklet loading', async () => {
     let loaded!: () => void;
-    const recorder = new SpeechRecorder('ws://localhost', vi.fn(), vi.fn());
+    const status = vi.fn();
+    const recorder = new SpeechRecorder('ws://localhost', status, vi.fn());
     recorder.start();
     MockContext.instances[0].audioWorklet.addModule.mockReturnValue(new Promise<void>(resolve => { loaded = resolve; }));
     await vi.waitFor(() => expect(MockContext.instances[0].audioWorklet.addModule).toHaveBeenCalledOnce());
+    expect(status.mock.calls.map(call => call[0])).toEqual(['preparing']);
     recorder.cancel();
     loaded();
     await Promise.resolve();
     await Promise.resolve();
     expect(track.stop).toHaveBeenCalledOnce();
     expect(MockWorklet.instances).toHaveLength(0);
+    expect(status.mock.calls.map(call => call[0])).toEqual(['preparing', 'idle']);
   });
 
   it('reports microphone denial and closes the audio context and transport', async () => {
     getUserMedia.mockRejectedValue(new Error('Permission denied'));
     const error = vi.fn();
-    const recorder = new SpeechRecorder('ws://localhost', vi.fn(), error);
+    const status = vi.fn();
+    const recorder = new SpeechRecorder('ws://localhost', status, error);
     recorder.start();
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith('Permission denied'));
     expect(MockContext.instances[0].close).toHaveBeenCalledOnce();
     expect(transport.cancel).toHaveBeenCalledOnce();
+    expect(status.mock.calls.map(call => call[0])).toEqual(['preparing', 'idle']);
+  });
+
+  it('enters recording only after permission and the audio processing graph are ready', async () => {
+    let grant!: (stream: object) => void;
+    let load!: () => void;
+    getUserMedia.mockReturnValue(new Promise(resolve => { grant = resolve; }));
+    const status = vi.fn();
+    const recorder = new SpeechRecorder('ws://localhost', status, vi.fn());
+    recorder.start();
+    const context = MockContext.instances[0];
+    context.audioWorklet.addModule.mockReturnValue(new Promise<void>(resolve => { load = resolve; }));
+    expect(status.mock.calls.map(call => call[0])).toEqual(['preparing']);
+    grant({ getTracks: () => [track] });
+    await vi.waitFor(() => expect(context.audioWorklet.addModule).toHaveBeenCalledOnce());
+    expect(status.mock.calls.map(call => call[0])).toEqual(['preparing']);
+    load();
+    await vi.waitFor(() => expect(status).toHaveBeenCalledWith('recording'));
+    expect(MockWorklet.instances[0].connect.mock.invocationCallOrder[0])
+      .toBeLessThan(status.mock.invocationCallOrder[1]);
+    recorder.cancel();
   });
 
   it('times out a failed audio flush without submitting a truncated command', async () => {

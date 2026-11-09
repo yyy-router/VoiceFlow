@@ -1,6 +1,6 @@
 import { SpeechStreamClient } from './speech-stream-client';
 
-export type SpeechStatus = 'idle' | 'recording' | 'transcribing';
+export type SpeechStatus = 'idle' | 'preparing' | 'recording' | 'transcribing';
 
 /** Owns one push-to-talk recording, including asynchronous microphone permission. */
 export class SpeechRecorder {
@@ -28,7 +28,7 @@ export class SpeechRecorder {
       const resumed = context.resume();
       void resumed.catch(error => this.fail(error));
       this.transport = new SpeechStreamClient(this.url, message => this.fail(new Error(message)));
-      this.onStatus('recording');
+      this.onStatus('preparing');
       void this.capture(context, resumed).catch(error => this.fail(error));
     } catch (error) {
       this.fail(error);
@@ -61,6 +61,7 @@ export class SpeechRecorder {
     this.source.connect(processor);
     // The processor's output is silence; microphone audio is never played back.
     processor.connect(context.destination);
+    this.onStatus('recording');
   }
 
   stop(): Promise<string> {
