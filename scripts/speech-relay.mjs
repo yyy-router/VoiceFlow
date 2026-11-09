@@ -26,6 +26,9 @@ export function attachSpeechRelay(server, {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 });
   const onUpgrade = (request, socket, head) => {
     if (request.url?.split('?')[0] !== SPEECH_PATH) return;
+    // Node removes the HTTP socket error handler before upgrade. Cover rejections
+    // as well as accepted handshakes, before ws installs its own error listener.
+    socket.on('error', () => socket.destroy());
     const reservation = admission.acquire(request);
     if (!reservation.allowed) {
       const status = { 401: 'Unauthorized', 403: 'Forbidden', 429: 'Too Many Requests', 503: 'Service Unavailable' }[reservation.status];

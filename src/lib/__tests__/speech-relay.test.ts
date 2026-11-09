@@ -1,5 +1,5 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
-import { once } from 'node:events';
+import { once, EventEmitter } from 'node:events';
 import { createConnection, type AddressInfo } from 'node:net';
 import WebSocket, { WebSocketServer } from 'ws';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -86,7 +86,7 @@ async function fixture(options: {
     ]);
   });
   return {
-    sessions, host, url: `ws://${host}/api/speech/stream`,
+    sessions, host, server, url: `ws://${host}/api/speech/stream`,
     connect(clientOptions: WebSocket.ClientOptions = { origin: `http://${host}` }) {
       const client = new WebSocket(`ws://${host}/api/speech/stream`, clientOptions);
       clients.push(client);
@@ -106,6 +106,50 @@ afterEach(async () => {
 });
 
 describe('browser to ASR realtime relay', () => {
+  it.each([401, 403, 429, 503])('handles a socket error while sending an admission denial (%i)', status => {
+    const server = new EventEmitter();
+    const admission = createSpeechAdmission({ allowAnonymous: true });
+    vi.spyOn(admission, 'acquire').mockReturnValue({ allowed: false, status, message: 'denied', headers: {} });
+    const createUpstream = vi.fn();
+    const relay = attachSpeechRelay(server, { admission, createUpstream });
+    const socket = Object.assign(new EventEmitter(), {
+      destroy: vi.fn(),
+      end: vi.fn(() => socket.emit('error', Object.assign(new Error('Peer reset'), { code: 'ECONNRESET' }))),
+    });
+    try {
+      expect(() => server.emit('upgrade', { url: '/api/speech/stream' }, socket, Buffer.alloc(0))).not.toThrow();
+      expect(socket.end).toHaveBeenCalledWith(expect.stringContaining(`HTTP/1.1 ${status}`));
+      expect(socket.destroy).toHaveBeenCalledOnce();
+      expect(createUpstream).not.toHaveBeenCalled();
+    } finally {
+      relay.close();
+    }
+  });
+
+  it('contains a rejected-upgrade socket error without relying on a global exception handler', async () => {
+    const f = await fixture();
+    const injected = new Promise<void>((resolve, reject) => {
+      f.server.once('upgrade', (_request, socket) => {
+        try {
+          socket.emit('error', Object.assign(new Error('Peer reset'), { code: 'ECONNRESET' }));
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    const client = f.connect({});
+    const failed = once(client, 'error');
+    await expect(injected).resolves.toBeUndefined();
+    await failed;
+    expect(f.sessions).toHaveLength(0);
+    const response = await fetch(`http://${f.host}`);
+    expect(response.status).toBe(200);
+    await response.body?.cancel();
+    await f.open();
+    expect(f.sessions).toHaveLength(1);
+  });
+
   it('delivers audio to ASR before recording ends and preserves the final chunk before commit', async () => {
     const f = await fixture();
     class BrowserSocket extends WebSocket {
