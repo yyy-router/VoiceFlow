@@ -35,7 +35,7 @@ export default function VoicePanel({
   stateInfo,
 }: Props) {
   const [log, setLog] = useState<string[]>([]);
-  const isHolding = useRef(false);
+  const activePointerId = useRef<number | null>(null);
   const reasoningEndRef = useRef<HTMLDivElement>(null);
 
   const addLog = useCallback((msg: string) => setLog((p) => [msg, ...p].slice(0, 50)), []);
@@ -47,16 +47,17 @@ export default function VoicePanel({
     }
   }, [reasoningText]);
 
-  const onDown = useCallback(() => {
-    if (isHolding.current) return;
-    isHolding.current = true;
+  const onDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || activePointerId.current !== null || isLoading || isTranscribing) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    activePointerId.current = event.pointerId;
     startListening();
     addLog('开始录音...');
-  }, [startListening, addLog]);
+  }, [startListening, addLog, isLoading, isTranscribing]);
 
-  const onUp = useCallback(async () => {
-    if (!isHolding.current) return;
-    isHolding.current = false;
+  const onUp = useCallback(async (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (activePointerId.current !== event.pointerId) return;
+    activePointerId.current = null;
     const text = await stopListening();
     if (text) {
       addLog(text);
@@ -79,11 +80,7 @@ export default function VoicePanel({
     <div className="flex flex-col gap-5 h-full">
       {/* Mic button */}
       <button
-        onPointerDown={event => {
-          if (event.button !== 0) return;
-          event.currentTarget.setPointerCapture(event.pointerId);
-          onDown();
-        }}
+        onPointerDown={onDown}
         onPointerUp={onUp}
         onPointerCancel={onUp}
         onLostPointerCapture={onUp}
