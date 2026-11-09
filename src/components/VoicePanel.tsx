@@ -5,6 +5,7 @@ import { Mic, MicOff, Loader2 } from 'lucide-react';
 
 interface Props {
   isListening: boolean;
+  isTranscribing: boolean;
   isSupported: boolean;
   speechError: string | null;
   isLoading: boolean;
@@ -19,6 +20,7 @@ interface Props {
 
 export default function VoicePanel({
   isListening,
+  isTranscribing,
   isSupported,
   speechError,
   isLoading,
@@ -44,6 +46,7 @@ export default function VoicePanel({
   }, [reasoningText]);
 
   const onDown = useCallback(() => {
+    if (isHolding.current) return;
     isHolding.current = true;
     startListening();
     addLog('开始录音...');
@@ -74,10 +77,16 @@ export default function VoicePanel({
     <div className="flex flex-col gap-5 h-full">
       {/* Mic button */}
       <button
-        onPointerDown={onDown}
+        onPointerDown={event => {
+          if (event.button !== 0) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          onDown();
+        }}
         onPointerUp={onUp}
-        onPointerLeave={onUp}
-        disabled={isLoading}
+        onPointerCancel={onUp}
+        onLostPointerCapture={onUp}
+        disabled={isLoading || isTranscribing}
+        style={{ touchAction: 'none' }}
         className={`w-full py-5 rounded-2xl text-base font-medium transition-all select-none flex items-center justify-center gap-2.5 ${
           isListening
             ? 'bg-danger text-white mic-active-ring shadow-lg shadow-danger/25'
@@ -88,6 +97,11 @@ export default function VoicePanel({
           <>
             <Mic className="w-5 h-5" />
             松开结束
+          </>
+        ) : isTranscribing ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            正在识别语音...
           </>
         ) : isLoading ? (
           <>
